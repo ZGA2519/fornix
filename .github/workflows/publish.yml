@@ -1,11 +1,11 @@
 # Every push to main runs the tests; if they pass and pyproject's version is not on
 # PyPI yet, it is published, once. A push that does not bump the version stops after
 # the tests. The release tag is pushed before publishing: setup.py, when installed
-# from PyPI, clones v<version> for .context/ and skills/.
+# from PyPI, clones v<version> for .fornix/ and skills/.
 #
 # Auth is PyPI trusted publishing, no token stored anywhere. One-time setup on PyPI:
-# project context-system → Manage → Publishing → GitHub: owner ZGA2519,
-# repository context-system, workflow publish.yml, environment pypi.
+# project fornix → Manage → Publishing → GitHub: owner ZGA2519,
+# repository fornix, workflow publish.yml, environment pypi.
 name: publish
 on:
   push:
@@ -20,7 +20,7 @@ jobs:
       - name: installer
         run: python3 test_setup.py
       - name: store
-        run: uv run --directory .context --group dev python -m pytest -q
+        run: uv run --directory .fornix --group dev python -m pytest -q
 
   publish:
     needs: test
@@ -38,7 +38,7 @@ jobs:
         run: |
           v=$(uv version --short)
           echo "version=$v" >> "$GITHUB_OUTPUT"
-          if curl -fs "https://pypi.org/pypi/context-system/$v/json" >/dev/null; then
+          if curl -fs "https://pypi.org/pypi/fornix/$v/json" >/dev/null; then
             echo "$v is already on PyPI, nothing to publish"
             echo "skip=1" >> "$GITHUB_OUTPUT"
           fi

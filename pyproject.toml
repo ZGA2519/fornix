@@ -1,16 +1,17 @@
 [project]
-name = "context-system"
-version = "0.1.3"
+name = "fornix"
+version = "0.2.0"
 description = "Project memory for AI coding sessions. Lives in the repo, travels with the code, shared by every model that opens it, consulted on every prompt."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = []
 
 [project.urls]
-Repository = "https://github.com/ZGA2519/context-system"
+Repository = "https://github.com/ZGA2519/fornix"
 
 [project.scripts]
-context-system = "setup:main"
+fornix = "setup:main"
+context-system = "setup:main"  # the name before the rename, so old uvx lines still run
 
 # flit_core: the one backend that ships a single-file module without ever executing
 # setup.py (setuptools would run it at build time and start the wizard).

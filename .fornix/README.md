@@ -1,4 +1,4 @@
-# .context
+# .fornix
 
 Project memory that every AI session and every model shares, versioned with the code it describes.
 
@@ -11,13 +11,13 @@ context_store/server.py  MCP server (stdio or HTTP) and a JSON API over the same
 
 ## Install in a project
 
-From the context-system checkout, `./install.sh /path/to/your-repo` does this and
+From the fornix checkout, `./install.sh /path/to/your-repo` does this and
 the `context-sync` skill in one step; add `--codex`, `--gemini`, `--agy` or `--vscode`
 to register those clients as well (see `setup.sh` below). By hand: copy this folder to the repo root as
-`.context/` and put `.mcp.json` next to it:
+`.fornix/` and put `.mcp.json` next to it:
 
 ```json
-{"mcpServers": {"context-system": {"command": "uv", "args": ["run", "--directory", ".context", "python", "-m", "context_store.server", "mcp"]}}}
+{"mcpServers": {"fornix": {"command": "uv", "args": ["run", "--directory", ".fornix", "python", "-m", "context_store.server", "mcp"]}}}
 ```
 
 Needs [uv](https://docs.astral.sh/uv/). The first `uv run` builds `.venv/` and downloads the embedding model (about 30 MB) into `$FASTEMBED_CACHE_PATH`, or the temp dir if unset. Commit `memories/`; the `.gitignore` in this folder drops everything else.
@@ -27,20 +27,20 @@ Needs [uv](https://docs.astral.sh/uv/). The first `uv run` builds `.venv/` and d
 Claude Code reads `.mcp.json` and starts the server itself. Any other MCP client over stdio:
 
 ```sh
-uv run --directory .context python -m context_store.server mcp
+uv run --directory .fornix python -m context_store.server mcp
 ```
 
 `setup.sh` registers that command with a client through the client's own `mcp add`, or prints every command when given no flag:
 
 ```sh
-.context/setup.sh                    # print, run nothing
-.context/setup.sh --codex --gemini   # run those; also --claude --agy --vscode
+.fornix/setup.sh                    # print, run nothing
+.fornix/setup.sh --codex --gemini   # run those; also --claude --agy --vscode
 ```
 
 As a service, JSON API with docs at `/docs` and MCP at `/mcp`:
 
 ```sh
-uv run --directory .context python -m context_store.server serve            # http://127.0.0.1:8765
+uv run --directory .fornix python -m context_store.server serve            # http://127.0.0.1:8765
 curl -s localhost:8765/select -d '{"query":"how is auth done"}' -H 'content-type: application/json'
 ```
 

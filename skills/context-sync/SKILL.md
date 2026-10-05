@@ -1,15 +1,15 @@
 ---
 name: context-sync
-description: Drives the `context-system` MCP server (project memory - write/select/compress/isolate over a .context/ folder) on a fixed per-turn loop so recall and capture happen every prompt instead of whenever the model happens to think of it. Provides three commands, context-start-sync, context-start-sync-readonly and context-stop-sync. Use this skill whenever the user types any of those names, with or without a leading slash, and also whenever they ask to start or stop syncing context, turn project memory on or off, sync context without writing to it, recall only, read-only context, "keep context in sync", "remember this for the project", "check the context store first", or when a repo contains a .context/ folder and the user wants past decisions honored. Also use it when a session has clearly stopped consulting project memory and needs to be put back on the loop.
+description: Drives the `fornix` MCP server (project memory - write/select/compress/isolate over a .fornix/ folder) on a fixed per-turn loop so recall and capture happen every prompt instead of whenever the model happens to think of it. Provides three commands, context-start-sync, context-start-sync-readonly and context-stop-sync. Use this skill whenever the user types any of those names, with or without a leading slash, and also whenever they ask to start or stop syncing context, turn project memory on or off, sync context without writing to it, recall only, read-only context, "keep context in sync", "remember this for the project", "check the context store first", or when a repo contains a .fornix/ folder and the user wants past decisions honored. Also use it when a session has clearly stopped consulting project memory and needs to be put back on the loop.
 ---
 
 # context-sync
 
-The `context-system` MCP server is a shared project memory: `memories/<scope>.jsonl` committed to git, a sqlite-vec index rebuilt from it, four operations. It works fine on its own — the problem it does not solve is *when* to call it. This skill supplies the when: two commands that flip a per-turn discipline on and off.
+The `fornix` MCP server is a shared project memory: `memories/<scope>.jsonl` committed to git, a sqlite-vec index rebuilt from it, four operations. It works fine on its own — the problem it does not solve is *when* to call it. This skill supplies the when: two commands that flip a per-turn discipline on and off.
 
 ## The server
 
-Launched by `.mcp.json` at the repo root as `uv run --directory .context python -m context_store.server mcp`. Four tools:
+Launched by `.mcp.json` at the repo root as `uv run --directory .fornix python -m context_store.server mcp`. Four tools:
 
 | tool | args | use |
 | --- | --- | --- |
@@ -24,7 +24,7 @@ Scope names are `[a-z0-9._-]`, 64 chars max, one JSONL file each. `main` is the 
 
 1. Check the server answers: `select(query="", k=3)`. If the call errors, report that and **do not** turn sync on — say what failed and suggest `/mcp` to reconnect.
 2. Prime the session: `select(query=<what this session is about>, k=8)`. If the user gave no topic yet, the empty query from step 1 is enough.
-3. If a `.context/` directory exists, `echo full > .context/.sync-on`. This is the flag the hook reads, and its contents are the mode; harmless without the hook. It's gitignored by the install. In a window opened over several repos, the flag belongs to the repo being synced — `<repo>/.context/.sync-on` — never the folder above them.
+3. If a `.fornix/` directory exists, `echo full > .fornix/.sync-on`. This is the flag the hook reads, and its contents are the mode; harmless without the hook. It's gitignored by the install. In a window opened over several repos, the flag belongs to the repo being synced — `<repo>/.fornix/.sync-on` — never the folder above them.
 4. Report in one line what came back, then run the loop below on **every** following prompt until `context-stop-sync`.
 
 ## Command: context-start-sync-readonly
@@ -32,7 +32,7 @@ Scope names are `[a-z0-9._-]`, 64 chars max, one JSONL file each. `main` is the 
 Same as `context-start-sync` with capture switched off: recall on every prompt, write nothing, ever. For working in someone else's repo, on a branch whose decisions aren't settled, or any session whose reasoning shouldn't end up in a committed store.
 
 1. Steps 1 and 2 above, unchanged.
-2. `echo readonly > .context/.sync-on` instead of `full`.
+2. `echo readonly > .fornix/.sync-on` instead of `full`.
 3. Report that sync is on in read-only mode, then run the loop with the **Capture** half skipped.
 
 While read-only:
@@ -90,8 +90,8 @@ Default everything to `main`. For a sub-task or a subagent that will generate a 
 Stops either mode.
 
 1. In full mode, final flush: write anything durable from this session that isn't stored yet. This is the last chance. In read-only mode, skip this — read-only means read-only right through the exit.
-2. `rm -f .context/.sync-on`, in each repo it was set for.
-3. Stop calling `context-system` tools. Don't recall, don't write, don't offer to — until a start command comes again.
+2. `rm -f .fornix/.sync-on`, in each repo it was set for.
+3. Stop calling `fornix` tools. Don't recall, don't write, don't offer to — until a start command comes again.
 4. Report: `context: sync off · N written this session`, or `context: sync off · read-only, nothing written`.
 
 ## When it breaks
@@ -100,15 +100,15 @@ A tool error or an unreachable server: say it once, treat sync as off, carry on 
 
 ## Making it survive a long session
 
-These instructions live in context, so on a long or heavily compacted session the loop can quietly fade. The hard guarantee is the `UserPromptSubmit` hook at `.claude/hooks/context-sync.sh`, which re-injects the loop on every prompt as long as `.context/.sync-on` exists. `install.sh` puts it there and registers it in `.claude/settings.json`; if this repo was set up by hand or with `--no-hook`, re-run `./install.sh <this repo>` from the context-system checkout to add it. Claude Code CLI only — Cowork does not fire hooks, so there the skill-only path is all there is.
+These instructions live in context, so on a long or heavily compacted session the loop can quietly fade. The hard guarantee is the `UserPromptSubmit` hook at `.claude/hooks/context-sync.sh`, which re-injects the loop on every prompt as long as `.fornix/.sync-on` exists. `install.sh` puts it there and registers it in `.claude/settings.json`; if this repo was set up by hand or with `--no-hook`, re-run `./install.sh <this repo>` from the fornix checkout to add it. Claude Code CLI only — Cowork does not fire hooks, so there the skill-only path is all there is.
 
 The three command names are real slash commands when `install.sh` has run (they live in `.claude/commands/`, which is the only place Claude Code looks — command files sitting inside a skill folder are never registered). Without them, typing the command name as plain text works just as well.
 
 ## Many repos in one window
 
-One store per repo, but the editor is often open on the folder above several of them. Running `.context/setup.sh --set-root <that folder>` inside each repo puts a `context-system-<repo>` server in the folder's `.mcp.json` — absolute path, so it starts from anywhere — copies the skill, the commands and the hook into its `.claude/`, and lists the repo in `.claude/context-sync.repos`, which is how the hook finds the members.
+One store per repo, but the editor is often open on the folder above several of them. Running `.fornix/setup.sh --set-root <that folder>` inside each repo puts a `fornix-<repo>` server in the folder's `.mcp.json` — absolute path, so it starts from anywhere — copies the skill, the commands and the hook into its `.claude/`, and lists the repo in `.claude/context-sync.repos`, which is how the hook finds the members.
 
-The stores stay separate on purpose: one repo's decisions are not another's. Recall from the server that owns the files a prompt is about and write back to that same one — `context-system-api` for `api/`, `context-system-web` for `web/`. Sync is per repo too. The hook arms exactly the servers whose repo has a `.sync-on` flag, so a session can have one repo capturing, another read-only, and the rest off.
+The stores stay separate on purpose: one repo's decisions are not another's. Recall from the server that owns the files a prompt is about and write back to that same one — `fornix-api` for `api/`, `fornix-web` for `web/`. Sync is per repo too. The hook arms exactly the servers whose repo has a `.sync-on` flag, so a session can have one repo capturing, another read-only, and the rest off.
 
 ## Tuning
 
