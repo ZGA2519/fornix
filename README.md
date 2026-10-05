@@ -129,6 +129,21 @@ of taking the defaults.
 Commit `.fornix/memories/`. Everything else under `.fornix/` is gitignored.
 Re-run the command any time to update an install; `memories/` is never touched.
 
+### Upgrading from context-system
+
+```sh
+uvx fornix --upgrade
+```
+
+Moves `.context/` to `.fornix/` and swaps the `context-system` server entry for
+`fornix`, keeping the hook choice the install already had. If a teammate's rename
+already came in with a pull, so both folders exist, the memories left in
+`.context/memories/` are merged in by id and `.context/` is removed; an id whose text
+differs on the two sides stops the removal so you can compare. Workspace folders that
+registered the repo with `--set-root` are re-pointed too. Other clients registered by
+hand (`codex`, `gemini`, …) still carry the old `context-system` entry: remove it with
+their own `mcp remove`.
+
 ### How it works
 
 Once sync is on, every prompt runs the same loop:
