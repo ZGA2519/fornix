@@ -102,10 +102,29 @@ Any MCP client gets the same four tools. There is also an HTTP service with a JS
 
 ## Quick start
 
+### Prerequisites
+
+| tool | why |
+| --- | --- |
+| [Python](https://www.python.org/downloads/) 3.12+ | runs the installer; the store needs 3.14, which uv fetches for you |
+| [uv](https://docs.astral.sh/uv/) | runs the MCP server, and `uvx` runs the installer. No uv yet? `pip install uv` or `pipx install uv` |
+| `git` | the installer fetches the release from GitHub |
+
+### Install
+
 ```sh
 cd your-repo
 uvx fornix -y
 ```
+
+No uv for the installer? Either of these does the same:
+
+```sh
+pipx run fornix -y                  # pipx
+pip install fornix && fornix -y     # plain pip, ideally in a venv
+```
+
+The server still runs through uv, so it has to be on `PATH` either way.
 
 Restart Claude Code, approve the `fornix` server when asked, then:
 
@@ -113,7 +132,7 @@ Restart Claude Code, approve the `fornix` server when asked, then:
 /context-start-sync
 ```
 
-That is the whole setup. Needs [uv](https://docs.astral.sh/uv/) and `git`.
+That is the whole setup.
 Drop the `-y` to be asked about the target, the hook and the other clients instead
 of taking the defaults.
 
