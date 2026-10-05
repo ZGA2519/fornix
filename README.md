@@ -35,6 +35,8 @@
   <a href="https://github.com/ZGA2519/fornix/blob/main/docs/banner.mp4">
     <img src="https://raw.githubusercontent.com/ZGA2519/fornix/main/docs/banner.gif" alt="22-second walkthrough: install with uvx, recall before answering, capture after acting, commit the memory with the code" width="100%" />
   </a>
+  <br/>
+  <sub>Video made with <a href="https://github.com/latent-spaces/brag">brag</a>.</sub>
 </p>
 
 Every AI session starts from zero. Yesterday's decision gets re-argued, last
