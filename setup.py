@@ -27,6 +27,7 @@ HOOK_CMD = '"$CLAUDE_PROJECT_DIR"/.claude/hooks/context-sync.sh'
 
 USAGE = """\
 %(prog)s [TARGET_REPO] [-y] [--no-hook] [--claude] [--codex] [--gemini] [--agy] [--vscode]
+       %(prog)s [TARGET_REPO] --upgrade [--no-hook] [--claude] [--codex] [--gemini] [--agy] [--vscode]
        %(prog)s [FOLDER] --set-root [-y]"""
 DESCRIPTION = """\
 Installs into TARGET_REPO (default: the current directory):
@@ -47,6 +48,12 @@ Installs into TARGET_REPO (default: the current directory):
 Anything not given is asked for interactively when there is a terminal. -y (--yes)
 answers every question with its default instead: the current directory, the hook on,
 no extra clients.
+
+--upgrade       update an install that is already there, without questions. One from
+                before the rename (.context/) becomes .fornix/; if a .fornix/ is there
+                too (a pull brought the renamed memories/), .context/memories/ is merged
+                in by id and .context/ removed. Workspace folders that registered this
+                repo are re-pointed at .fornix/. The hook stays as the install had it.
 
 --set-root      the other job: FOLDER (default: the current directory) is a workspace
                 folder opened over several repos. Finds every repo with a .fornix/
@@ -79,6 +86,37 @@ def say(path, status):
         glyph, colour, kind = f"{G}✔", G if any(v in status for v in verbs) else "", "new"
     count[kind] += 1
     print(f"  {glyph}{R} {C}{path:<28}{R} {colour}{status}{R}")
+
+
+def merge_memories(old, new):
+    """Append every line of old/**/*.jsonl whose id new/ does not have yet.
+    Returns (added, clashes): clashes are ids in both with different text, left for a person."""
+    def key(line):
+        try:
+            k = json.loads(line)["id"]
+        except (ValueError, KeyError, TypeError):
+            return line
+        return k if isinstance(k, str) else line
+    added = clashes = 0
+    for f in sorted(old.rglob("*.jsonl")) if old.is_dir() else []:
+        dest = new / f.relative_to(old)
+        body = dest.read_text() if dest.is_file() else ""
+        have = {key(x): x for x in body.splitlines() if x.strip()}
+        fresh = []
+        for line in f.read_text().splitlines():
+            k = key(line)
+            if not line.strip() or have.get(k) == line:
+                continue
+            if k in have:
+                clashes += 1
+            else:
+                have[k] = line
+                fresh.append(line)
+        if fresh:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(body + ("\n" if body and not body.endswith("\n") else "") + "\n".join(fresh) + "\n")
+            added += len(fresh)
+    return added, clashes
 
 
 def load_json(p):
@@ -343,6 +381,7 @@ def main(argv=None):
     ap.add_argument("-y", "--yes", action="store_true")
     ap.add_argument("--no-hook", dest="hook", action="store_false", default=None)
     ap.add_argument("--set-root", action="store_true")
+    ap.add_argument("--upgrade", action="store_true")
     for f in CLIENT_FLAGS:
         ap.add_argument(f, dest="clients", action="append_const", const=f, default=None)
     a = ap.parse_args(argv)
@@ -352,6 +391,7 @@ def main(argv=None):
 
     if a.set_root:
         return set_root(target or Path.cwd(), a.yes)
+    a.yes = a.yes or a.upgrade
 
     src = source()
 
@@ -379,26 +419,45 @@ def main(argv=None):
             sys.exit(130)
         print()
 
-    hook = True if a.hook is None else a.hook
     target = target or Path.cwd()
     if not target.is_dir():
         sys.exit(f"install: no such directory: {target}")
     target = target.resolve()
     if target == src:
         sys.exit("install: target is the source checkout; pass the repo to install into")
+    if a.upgrade:
+        if not any((target / d / "context_store").is_dir() for d in (".context", ".fornix")):
+            sys.exit(f"install: nothing to upgrade in {target}; run without --upgrade to install")
+        if a.hook is None:  # keep the choice the old install made
+            a.hook = (target / ".claude/hooks/context-sync.sh").is_file()
+    hook = True if a.hook is None else a.hook
 
     print(f"{M}▌{R} {B}fornix{R} {D}→{R} {target}\n")
 
     # --- .context/ → .fornix/ ----------------------------------------------
     # Installs from before the rename keep the store in .context/. Move it whole so
     # memories/, .sync-on and the built index come along.
+    # With --upgrade, a .fornix/ that is already there (a teammate's rename pulled in
+    # memories/) gets .context/memories/ merged in by id, and .context/ goes.
     old = target / ".context"
+    moved = False
     if (old / "context_store").is_dir():
-        if (target / ".fornix").exists():
-            say(".context/", "skipped, .fornix/ is there too; move memories/ over by hand")
-        else:
+        if not (target / ".fornix").exists():
             old.rename(target / ".fornix")
+            moved = True
             say(".fornix/", "moved from .context/")
+        elif not a.upgrade:
+            say(".context/", "skipped, .fornix/ is there too; re-run with --upgrade to merge it in")
+        else:
+            added, clashes = merge_memories(old / "memories", target / ".fornix/memories")
+            if (old / ".sync-on").is_file() and not (target / ".fornix/.sync-on").exists():
+                shutil.copy(old / ".sync-on", target / ".fornix/.sync-on")
+            if clashes:
+                say(".context/", f"skipped removal, {clashes} memories differ from .fornix/; compare by hand")
+            else:
+                shutil.rmtree(old)
+                moved = True
+                say(".fornix/memories/", f"merged {added} from .context/, .context/ removed")
 
     # --- .fornix/ ---------------------------------------------------------
     # Everything but memories/, which is the user's data and is handled separately below.
@@ -490,6 +549,20 @@ def main(argv=None):
             save_json(p, doc)
             result = "registered"
         say(".claude/settings.json", f"UserPromptSubmit hook {result}")
+
+    # --- workspace folders -------------------------------------------------
+    # A folder above this repo that registered it still points at .context/; its own
+    # set_root re-registers the repo under .fornix/ and drops the stale entry.
+    for root in target.parents if a.upgrade or moved else []:
+        reg = root / ".claude/context-sync.repos"
+        if reg.is_file() and any(Path(x.split(" ", 1)[-1]).resolve() == target
+                                 for x in reg.read_text().splitlines() if x.strip()):
+            sec(f"workspace folder {root}")
+            sys.stdout.flush()  # setup.sh writes straight to the fd; keep its lines after ours
+            try:
+                subprocess.run(["sh", str(target / ".fornix/setup.sh"), "--set-root", str(root)])
+            except OSError:
+                print(f"  {Y}! no sh on PATH; run .fornix/setup.sh --set-root {root} from a shell that has one{R}")
 
     # --- summary -----------------------------------------------------------
     print(f"\n  {G}{count['new']} updated{R} {D}·{R} {D}{count['same']} unchanged{R} {D}·{R} {Y}{count['skip']} skipped{R}")

@@ -60,6 +60,44 @@ def test_migrates_context_install():
         assert set(json.loads((t / ".mcp.json").read_text())["mcpServers"]) == {"fornix", "other"}
 
 
+def test_upgrade_merges_leftover_context():
+    """A pull brought .fornix/memories/ while the old .context/ stayed: --upgrade folds it in, both installers."""
+    for installer in ([sys.executable, HERE / "setup.py"], ["sh", HERE / "install.sh"]):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp).resolve()
+            t = root / "repo"
+            (t / ".context/context_store").mkdir(parents=True)
+            (t / ".context/memories").mkdir()
+            (t / ".context/memories/main.jsonl").write_text('{"id": "a"}\n{"id": "b"}\n')
+            (t / ".context/.sync-on").write_text("on")
+            (t / ".fornix/memories").mkdir(parents=True)
+            (t / ".fornix/memories/main.jsonl").write_text('{"id": "a"}\n')
+            (root / ".claude").mkdir()
+            (root / ".claude/context-sync.repos").write_text(f"context-system-repo {t}\n")
+            stale = {"command": "uv", "args": ["run", "--directory", str(t / ".context"), "python", "-m", "context_store.server", "mcp"]}
+            (root / ".mcp.json").write_text(json.dumps({"mcpServers": {"context-system-repo": stale}}))
+            r = subprocess.run([*installer, t, "--upgrade"], capture_output=True, text=True)
+            assert r.returncode == 0 and "merged 1 from .context/" in r.stdout, r.stdout + r.stderr
+            assert not (t / ".context").exists()
+            assert (t / ".fornix/memories/main.jsonl").read_text() == '{"id": "a"}\n{"id": "b"}\n'
+            assert (t / ".fornix/.sync-on").read_text() == "on"
+            assert not (t / ".claude/hooks").exists(), "the old install had no hook; --upgrade keeps it off"
+            servers = json.loads((root / ".mcp.json").read_text())["mcpServers"]
+            assert [v["args"][2] for v in servers.values()] == [str(t / ".fornix")], servers
+
+            # same id, different text: merge what is new, keep .context/ for a person to compare
+            (t / ".context/context_store").mkdir(parents=True)
+            (t / ".context/memories").mkdir()
+            (t / ".context/memories/main.jsonl").write_text('{"id": "a", "text": "local edit"}\n')
+            r = subprocess.run([*installer, t, "--upgrade"], capture_output=True, text=True)
+            assert r.returncode == 0 and "1 memories differ" in r.stdout, r.stdout + r.stderr
+            assert (t / ".context/memories/main.jsonl").is_file()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            r = subprocess.run([*installer, tmp, "--upgrade"], capture_output=True, text=True)
+            assert r.returncode == 1 and "nothing to upgrade" in r.stderr, r.stderr
+
+
 def test_set_root_finds_repos_below_root():
     with tempfile.TemporaryDirectory() as tmp:
         root = pathlib.Path(tmp)
@@ -116,6 +154,7 @@ if __name__ == "__main__":
     test_install_twice()
     test_no_hook_and_refuses_checkout()
     test_migrates_context_install()
+    test_upgrade_merges_leftover_context()
     test_set_root_finds_repos_below_root()
     test_wizard_by_keys()
     print("ok")

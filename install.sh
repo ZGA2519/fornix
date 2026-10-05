@@ -10,10 +10,12 @@ WANT_HOOK=""        # "" until answered, then 1 or 0
 CLIENTS=""
 GOT_CLIENTS=0       # 1 once a client flag was passed, so the wizard skips that question
 ASSUME_YES=0
+UPGRADE=0
 
 usage() {
   cat <<'USAGE'
 usage: ./install.sh [TARGET_REPO] [-y] [--no-hook] [--claude] [--codex] [--gemini] [--agy] [--vscode]
+       ./install.sh [TARGET_REPO] --upgrade [--no-hook] [--claude] [--codex] [--gemini] [--agy] [--vscode]
 
 Installs into TARGET_REPO (default: the current directory):
 
@@ -33,12 +35,19 @@ Installs into TARGET_REPO (default: the current directory):
 Anything not given is asked for interactively when there is a terminal. -y (--yes)
 answers every question with its default instead: the current directory, the hook on,
 no extra clients.
+
+--upgrade   update an install that is already there, without questions. One from
+            before the rename (.context/) becomes .fornix/; if a .fornix/ is there
+            too (a pull brought the renamed memories/), .context/memories/ is merged
+            in by id and .context/ removed. Workspace folders that registered this
+            repo are re-pointed at .fornix/. The hook stays as the install had it.
 USAGE
 }
 
 for arg in "$@"; do
   case "$arg" in
     -y|--yes) ASSUME_YES=1 ;;
+    --upgrade) UPGRADE=1; ASSUME_YES=1 ;;
     --no-hook) WANT_HOOK=0 ;;
     --claude|--codex|--gemini|--agy|--vscode) CLIENTS="$CLIENTS $arg"; GOT_CLIENTS=1 ;;
     -h|--help) usage; exit 0 ;;
@@ -274,7 +283,6 @@ if [ "$WIZARD" = 1 ]; then
   echo
 fi
 
-[ -n "$WANT_HOOK" ] || WANT_HOOK=1
 [ -n "$TARGET" ] || TARGET=$PWD
 [ -d "$TARGET" ] || { echo "install: no such directory: $TARGET" >&2; exit 1; }
 TARGET=$(CDPATH= cd -- "$TARGET" && pwd)
@@ -282,6 +290,13 @@ if [ "$TARGET" = "$SRC" ]; then
   echo "install: target is the source checkout; pass the repo to install into" >&2
   exit 1
 fi
+if [ "$UPGRADE" = 1 ]; then
+  [ -d "$TARGET/.context/context_store" ] || [ -d "$TARGET/.fornix/context_store" ] ||
+    { echo "install: nothing to upgrade in $TARGET; run without --upgrade to install" >&2; exit 1; }
+  # keep the choice the old install made
+  [ -n "$WANT_HOOK" ] || { [ -f "$TARGET/.claude/hooks/context-sync.sh" ] && WANT_HOOK=1 || WANT_HOOK=0; }
+fi
+[ -n "$WANT_HOOK" ] || WANT_HOOK=1
 
 HAVE_PY=1; command -v python3 >/dev/null 2>&1 || HAVE_PY=0
 HOOK_CMD='"$CLAUDE_PROJECT_DIR"/.claude/hooks/context-sync.sh'
@@ -304,12 +319,36 @@ printf '%s▌%s %sfornix%s %s→%s %s\n\n' "$M" "$R" "$B" "$R" "$D" "$R" "$TARGE
 # --- .context/ → .fornix/ --------------------------------------------------
 # Installs from before the rename keep the store in .context/. Move it whole so
 # memories/, .sync-on and the built index come along.
+# With --upgrade, a .fornix/ that is already there (a teammate's rename pulled in
+# memories/) gets .context/memories/ merged in by id, and .context/ goes.
+MOVED=0
 if [ -d "$TARGET/.context/context_store" ]; then
-  if [ -e "$TARGET/.fornix" ]; then
-    say .context/ "skipped, .fornix/ is there too; move memories/ over by hand"
-  else
+  if [ ! -e "$TARGET/.fornix" ]; then
     mv "$TARGET/.context" "$TARGET/.fornix"
+    MOVED=1
     say .fornix/ "moved from .context/"
+  elif [ "$UPGRADE" = 0 ]; then
+    say .context/ "skipped, .fornix/ is there too; re-run with --upgrade to merge it in"
+  elif [ "$HAVE_PY" = 0 ]; then
+    say .context/ "skipped, no python3 to merge memories/ with; move them over by hand"
+  else
+    merged=$(python3 - "$SRC" "$TARGET/.context/memories" "$TARGET/.fornix/memories" <<'PY'
+import pathlib, sys
+sys.path.insert(0, sys.argv[1])
+from setup import merge_memories  # the one merge, shared with setup.py
+print(*merge_memories(pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3])))
+PY
+)
+    added=${merged% *} clashes=${merged#* }
+    [ ! -f "$TARGET/.context/.sync-on" ] || [ -e "$TARGET/.fornix/.sync-on" ] ||
+      cp "$TARGET/.context/.sync-on" "$TARGET/.fornix/.sync-on"
+    if [ "$clashes" = 0 ]; then
+      rm -rf "$TARGET/.context"
+      MOVED=1
+      say .fornix/memories/ "merged $added from .context/, .context/ removed"
+    else
+      say .context/ "skipped removal, $clashes memories differ from .fornix/; compare by hand"
+    fi
   fi
 fi
 
@@ -440,6 +479,21 @@ PY
   else
     say .claude/settings.json "skipped, no python3. merge skills/context-sync/hooks/settings-snippet.json by hand" >&2
   fi
+fi
+
+# --- workspace folders -----------------------------------------------------
+# A folder above this repo that registered it still points at .context/; its own
+# set_root re-registers the repo under .fornix/ and drops the stale entry.
+lists_target() { while IFS= read -r _l; do [ "${_l#* }" != "$TARGET" ] || return 0; done < "$1"; return 1; }
+if [ "$UPGRADE" = 1 ] || [ "$MOVED" = 1 ]; then
+  _d=$TARGET
+  while [ "$_d" != / ]; do
+    _d=${_d%/*}; [ -n "$_d" ] || _d=/
+    if [ -f "$_d/.claude/context-sync.repos" ] && lists_target "$_d/.claude/context-sync.repos"; then
+      sec "workspace folder $_d"
+      sh "$TARGET/.fornix/setup.sh" --set-root "$_d" || true
+    fi
+  done
 fi
 
 # --- summary ---------------------------------------------------------------

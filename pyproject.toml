@@ -1,6 +1,6 @@
 [project]
 name = "fornix"
-version = "0.2.0"
+version = "0.3.0"
 description = "Project memory for AI coding sessions. Lives in the repo, travels with the code, shared by every model that opens it, consulted on every prompt."
 readme = "README.md"
 requires-python = ">=3.12"
