@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <a href="https://pypi.org/project/fornix/"><img src="https://img.shields.io/pypi/v/fornix?style=flat-square&color=blue" alt="pypi" /></a>
+  <a href="https://pypi.org/project/fornix/"><img src="https://img.shields.io/pypi/v/fornix?label=pypi&style=flat-square&color=blue" alt="pypi" /></a>
   <a href="https://github.com/ZGA2519/fornix/actions/workflows/publish.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZGA2519/fornix/publish.yml?style=flat-square&label=tests" alt="tests" /></a>
   <a href="https://github.com/ZGA2519/fornix/blob/main/LICENSE.txt"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="license" /></a>
 </p>
