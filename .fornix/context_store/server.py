@@ -19,7 +19,7 @@ from .store import Store
 store = Store()
 
 mcp = MCPServer(
-    "context-system",
+    "fornix",
     instructions=(
         "Project memory shared by every AI session and model working on this repo. "
         "Start a session with select(query=<what you are about to do>). "

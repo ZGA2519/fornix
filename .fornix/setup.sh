@@ -1,13 +1,13 @@
 #!/usr/bin/env sh
 # Register this folder's MCP server with a client, or add the repo to a workspace folder.
-#   .context/setup.sh                    ask what to do; --print only lists the commands
-#   .context/setup.sh --codex --gemini   run those; flags: --claude --codex --gemini --agy --vscode
-#   .context/setup.sh --set-root ..      add this repo to the workspace folder above it
+#   .fornix/setup.sh                    ask what to do; --print only lists the commands
+#   .fornix/setup.sh --codex --gemini   run those; flags: --claude --codex --gemini --agy --vscode
+#   .fornix/setup.sh --set-root ..      add this repo to the workspace folder above it
 set -eu
 
-HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)   # /abs/path/to/repo/.context
+HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)   # /abs/path/to/repo/.fornix
 REPO=${HERE%/*}
-NAME=context-system
+NAME=fornix
 UV=$(command -v uv || echo uv)
 HAVE_PY=1; command -v python3 >/dev/null 2>&1 || HAVE_PY=0
 
@@ -22,7 +22,7 @@ fi
 
 # --- prompts ---------------------------------------------------------------
 # The same vite-style wizard install.sh uses, carried here rather than shared:
-# this script ships inside .context/ to people who have no context-system
+# this script ships inside .fornix/ to people who have no fornix
 # checkout, so it has to stand on its own. One byte at a time off the tty,
 # arrows to move, space to toggle, enter to accept.
 TTY=/dev/tty
@@ -167,7 +167,7 @@ ask_dir() {
 
 # --- workspace root --------------------------------------------------------
 # One store per repo, but one editor window over many repos: each repo registers
-# itself into the folder above as context-system-<repo>, absolute paths so the
+# itself into the folder above as fornix-<repo>, absolute paths so the
 # server starts from anywhere, and the root gets the skill, the commands and the
 # hook. .claude/context-sync.repos is how the hook finds the member repos.
 set_root() {
@@ -221,15 +221,19 @@ def free(cand):
     # ours, or a leftover pointing at a folder that is not there any more
     return d == here or (d is not None and not pathlib.Path(d).is_dir())
 
+# this repo's entry from before .context/ became .fornix/, under its old name
+moved = [k for k, v in servers.items() if directory(v) == here[:-len(".fornix")] + ".context"]
+for k in moved:
+    del servers[k]
 name = next((c for c in (pref, alt) if free(c)), None)
 if name is None:
     sys.exit(f"{pref} and {alt} are both taken in {p} by other folders; edit it by hand")
 dead = [k for k, v in servers.items()
-        if k.startswith("context-system") and (d := directory(v)) and not pathlib.Path(d).is_dir()]
+        if k.startswith(("fornix", "context-system")) and (d := directory(v)) and not pathlib.Path(d).is_dir()]
 if dead:
     print("  note: these servers point at folders that are gone, drop them from",
           p, "when you get a chance:", ", ".join(dead), file=sys.stderr)
-if servers.get(name) == want:
+if servers.get(name) == want and not moved:
     print(name, "already present")
 else:
     verb = "updated" if name in servers else "added"
@@ -318,7 +322,7 @@ have() { command -v "$1" >/dev/null 2>&1 && printf '%s' "$2" || printf 'not on P
 wizard() {
   trap 'raw_off' EXIT HUP TERM
   trap 'bail' INT
-  printf '\n%s▌%s %scontext-system%s %s%s%s\n\n' "$M" "$R" "$B" "$R" "$D" "$REPO" "$R"
+  printf '\n%s▌%s %sfornix%s %s%s%s\n\n' "$M" "$R" "$B" "$R" "$D" "$REPO" "$R"
 
   claude_hint="project scoped, into .mcp.json"
   ! grep -qs "\"$NAME\"" "$REPO/.mcp.json" || claude_hint="already in .mcp.json"
@@ -373,7 +377,7 @@ while [ $# -gt 0 ]; do
   case $1 in
     # .mcp.json is committed, so paths stay relative and uv unresolved; the rest are user-wide configs, so absolute
     --claude) if [ "$DO" = 1 ] && grep -qs "\"$NAME\"" .mcp.json; then echo "  claude       already in .mcp.json"
-              else run claude claude mcp add -s project "$NAME" -- uv run --directory .context python -m context_store.server mcp; fi ;;
+              else run claude claude mcp add -s project "$NAME" -- uv run --directory .fornix python -m context_store.server mcp; fi ;;
     --codex)  run codex       codex mcp add "$NAME" -- "$UV" run --directory "$HERE" python -m context_store.server mcp ;;
     --gemini) run gemini      gemini mcp add "$NAME" -- "$UV" run --directory "$HERE" python -m context_store.server mcp ;;
     --agy)    run antigravity agy mcp add "$NAME" -- "$UV" run --directory "$HERE" python -m context_store.server mcp ;;
@@ -392,11 +396,11 @@ done
 [ "$DO" = 1 ] && exit 0
 cat <<EOF
 
-  pass a flag to run one, e.g. .context/setup.sh --codex
+  pass a flag to run one, e.g. .fornix/setup.sh --codex
 
   clients configured by file (Cursor, Windsurf, Cline, Zed, Claude Desktop) take this in mcpServers:
   "$NAME": {"command": "$UV", "args": ["run", "--directory", "$HERE", "python", "-m", "context_store.server", "mcp"]}
 
-  many repos in one editor window: run .context/setup.sh --set-root <folder> in each,
+  many repos in one editor window: run .fornix/setup.sh --set-root <folder> in each,
   and that folder gets a "$NAME-<repo>" server for every one of them
 EOF

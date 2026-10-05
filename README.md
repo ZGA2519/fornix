@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ZGA2519/context-system/main/docs/banner.jpg" alt="context system — Memory that moves with the code. $ uvx context-system -y" width="100%" />
+  <img src="https://raw.githubusercontent.com/ZGA2519/fornix/main/docs/banner.jpg" alt="fornix — Memory that moves with the code. $ uvx fornix -y" width="100%" />
 </p>
 
-<h1 align="center">Context System</h1>
+<h1 align="center">Fornix</h1>
 
 <p align="center">
   <strong>Project memory for AI coding sessions. Lives in the repo, travels with the code.</strong>
@@ -12,15 +12,15 @@
   <a href="#quick-start">Quick start</a> ·
   <a href="#the-four-operations">Four operations</a> ·
   <a href="#how-it-compares">Compare</a> ·
-  <a href="https://github.com/ZGA2519/context-system/blob/main/.context/README.md">Store &amp; server docs</a> ·
-  <a href="https://github.com/ZGA2519/context-system/blob/main/skills/context-sync/SKILL.md">Skill protocol</a> ·
-  <a href="https://pypi.org/project/context-system/">PyPI</a>
+  <a href="https://github.com/ZGA2519/fornix/blob/main/.fornix/README.md">Store &amp; server docs</a> ·
+  <a href="https://github.com/ZGA2519/fornix/blob/main/skills/context-sync/SKILL.md">Skill protocol</a> ·
+  <a href="https://pypi.org/project/fornix/">PyPI</a>
 </p>
 
 <p align="center">
-  <a href="https://pypi.org/project/context-system/"><img src="https://img.shields.io/pypi/v/context-system?style=flat-square&color=blue" alt="pypi" /></a>
-  <a href="https://github.com/ZGA2519/context-system/actions/workflows/publish.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZGA2519/context-system/publish.yml?style=flat-square&label=tests" alt="tests" /></a>
-  <a href="https://github.com/ZGA2519/context-system/blob/main/LICENSE.txt"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="license" /></a>
+  <a href="https://pypi.org/project/fornix/"><img src="https://img.shields.io/pypi/v/fornix?style=flat-square&color=blue" alt="pypi" /></a>
+  <a href="https://github.com/ZGA2519/fornix/actions/workflows/publish.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZGA2519/fornix/publish.yml?style=flat-square&label=tests" alt="tests" /></a>
+  <a href="https://github.com/ZGA2519/fornix/blob/main/LICENSE.txt"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="license" /></a>
 </p>
 
 <p align="center">
@@ -32,8 +32,8 @@
 ---
 
 <p align="center">
-  <a href="https://github.com/ZGA2519/context-system/blob/main/docs/banner.mp4">
-    <img src="https://raw.githubusercontent.com/ZGA2519/context-system/main/docs/banner.gif" alt="22-second walkthrough: install with uvx, recall before answering, capture after acting, commit the memory with the code" width="100%" />
+  <a href="https://github.com/ZGA2519/fornix/blob/main/docs/banner.mp4">
+    <img src="https://raw.githubusercontent.com/ZGA2519/fornix/main/docs/banner.gif" alt="22-second walkthrough: install with uvx, recall before answering, capture after acting, commit the memory with the code" width="100%" />
   </a>
 </p>
 
@@ -42,13 +42,13 @@ week's gotcha gets hit again, and the convention nobody wrote down gets broken b
 the next model to touch the code. Hosted memory tools fix this with a service
 outside the repo, so when the code moves, the memory does not.
 
-context system puts the memory **in the repo**. A teammate gets it by pulling, a
+fornix puts the memory **in the repo**. A teammate gets it by pulling, a
 branch carries its own decisions, a pull request reviews a decision next to the
 change that caused it. Any model, any MCP client.
 
 | | |
 |---|---|
-| 📦 **Store** | `.context/memories/*.jsonl`, one fact per line, committed. Git is the history. |
+| 📦 **Store** | `.fornix/memories/*.jsonl`, one fact per line, committed. Git is the history. |
 | 🔌 **Server** | An MCP server over that store. Four tools, a sqlite-vec index for semantic recall, no model inside. |
 | 🔁 **Discipline** | A skill and a hook that make the session recall *before* it answers and capture *after* it acts, every prompt, until told to stop. |
 | 🌿 **Branches with the code** | Check out a branch or an old tag and you get the memory that was true there, not whatever a central store believes today. |
@@ -56,7 +56,7 @@ change that caused it. Any model, any MCP client.
 
 ---
 
-## Use context system
+## Use fornix
 
 <table>
 <tr>
@@ -87,7 +87,7 @@ One store per repo, registered into the workspace folder above them. Each repo s
 Any MCP client gets the same four tools. There is also an HTTP service with a JSON API.
 
 ```sh
-.context/setup.sh --codex --gemini
+.fornix/setup.sh --codex --gemini
 ```
 
 **[→ Jump to Other clients](#other-clients)**
@@ -102,10 +102,10 @@ Any MCP client gets the same four tools. There is also an HTTP service with a JS
 
 ```sh
 cd your-repo
-uvx context-system -y
+uvx fornix -y
 ```
 
-Restart Claude Code, approve the `context-system` server when asked, then:
+Restart Claude Code, approve the `fornix` server when asked, then:
 
 ```
 /context-start-sync
@@ -119,14 +119,14 @@ of taking the defaults.
 
 | path | what |
 | --- | --- |
-| `.context/` | the store and the MCP server, with an empty `memories/main.jsonl` |
-| `.mcp.json` | the `context-system` server entry, merged into whatever was there |
+| `.fornix/` | the store and the MCP server, with an empty `memories/main.jsonl` |
+| `.mcp.json` | the `fornix` server entry, merged into whatever was there |
 | `.claude/skills/context-sync/` | the skill that drives the per-prompt loop |
 | `.claude/commands/context-*.md` | `/context-start-sync`, `/context-start-sync-readonly`, `/context-stop-sync` |
 | `.claude/hooks/context-sync.sh` + `settings.json` | a `UserPromptSubmit` hook that re-arms the loop every prompt, so it survives compaction |
 | `.agent/` | the same skill and commands under the vendor-neutral tree some agents read |
 
-Commit `.context/memories/`. Everything else under `.context/` is gitignored.
+Commit `.fornix/memories/`. Everything else under `.fornix/` is gitignored.
 Re-run the command any time to update an install; `memories/` is never touched.
 
 ### How it works
@@ -188,11 +188,11 @@ One store per repo, but the editor is usually open on the folder above several.
 From that folder:
 
 ```sh
-uvx context-system --set-root        # finds every repo with a .context/ up to 5 levels down, asks which join
+uvx fornix --set-root        # finds every repo with a .fornix/ up to 5 levels down, asks which join
 ```
 
-or inside each repo, `.context/setup.sh --set-root ..`. Either way the repo adds
-itself to that folder's `.mcp.json` as `context-system-<repo>` with an
+or inside each repo, `.fornix/setup.sh --set-root ..`. Either way the repo adds
+itself to that folder's `.mcp.json` as `fornix-<repo>` with an
 absolute path, and copies the skill, commands and hook into the folder's `.claude/`.
 Stores stay separate on purpose: one repo's decisions are not another's. Sync is
 per repo too, so one repo can be capturing while another is read-only and the rest
@@ -205,12 +205,12 @@ are off.
 **Claude Code** · **Codex** · **Gemini CLI** · **Antigravity** · **VS Code** · **Cursor** · **Windsurf** · **Cline** · **Zed** · **Claude Desktop** · any MCP client
 
 Claude Code reads `.mcp.json` and is done. Everything else is one command away,
-and `setup.sh` ships inside `.context/` so teammates without this repo have it:
+and `setup.sh` ships inside `.fornix/` so teammates without this repo have it:
 
 ```sh
-.context/setup.sh                      # asks: which clients, which workspace folder
-.context/setup.sh --codex --gemini     # also --claude --agy --vscode
-.context/setup.sh --print              # just list the commands
+.fornix/setup.sh                      # asks: which clients, which workspace folder
+.fornix/setup.sh --codex --gemini     # also --claude --agy --vscode
+.fornix/setup.sh --print              # just list the commands
 ```
 
 ### Manual configuration
@@ -219,7 +219,7 @@ Clients configured by file (Cursor, Windsurf, Cline, Zed, Claude Desktop) take
 this under `mcpServers`:
 
 ```json
-"context-system": {"command": "uv", "args": ["run", "--directory", "/abs/path/to/repo/.context", "python", "-m", "context_store.server", "mcp"]}
+"fornix": {"command": "uv", "args": ["run", "--directory", "/abs/path/to/repo/.fornix", "python", "-m", "context_store.server", "mcp"]}
 ```
 
 ### As a service
@@ -227,7 +227,7 @@ this under `mcpServers`:
 A JSON API with docs at `/docs` and MCP at `/mcp`:
 
 ```sh
-uv run --directory .context python -m context_store.server serve     # http://127.0.0.1:8765
+uv run --directory .fornix python -m context_store.server serve     # http://127.0.0.1:8765
 curl -s localhost:8765/select -d '{"query":"how is auth done"}' -H 'content-type: application/json'
 ```
 
@@ -237,15 +237,15 @@ All of these are the same installer with the same flags. `uvx` fetches the relea
 tag from GitHub, so it needs `git`; the rest run from a checkout.
 
 ```sh
-uvx context-system /path/to/repo -y                 # a repo other than the current one
-uvx context-system --no-hook                        # skill only, no hook
-uvx context-system --codex --vscode                 # register those clients as you go
-uvx --from git+https://github.com/ZGA2519/context-system context-system   # track main
+uvx fornix /path/to/repo -y                 # a repo other than the current one
+uvx fornix --no-hook                        # skill only, no hook
+uvx fornix --codex --vscode                 # register those clients as you go
+uvx --from git+https://github.com/ZGA2519/fornix fornix   # track main
 
-git clone https://github.com/ZGA2519/context-system && cd context-system
+git clone https://github.com/ZGA2519/fornix && cd fornix
 ./install.sh /path/to/repo        # POSIX sh, the original
 python3 setup.py /path/to/repo    # the same wizard in Python, runs in cmd.exe too
-uv run context-system --help      # everything the installer accepts
+uv run fornix --help      # everything the installer accepts
 ```
 
 ---
@@ -255,7 +255,7 @@ uv run context-system --help      # everything the installer accepts
 Three other shapes exist. Each is better than this at something; none of them is
 memory that moves with the code.
 
-| | `AGENTS.md` / `CLAUDE.md` | hosted memory<br>(Mem0, Zep, Supermemory) | local memory server<br>(MemPalace, Basic Memory, ai-memory) | context-system |
+| | `AGENTS.md` / `CLAUDE.md` | hosted memory<br>(Mem0, Zep, Supermemory) | local memory server<br>(MemPalace, Basic Memory, ai-memory) | fornix |
 | --- | --- | --- | --- | --- |
 | committed in the repo | ✓ | ✗ | ✗ | ✓ |
 | branches and merges with the code | ✓ | ✗ | ✗ | ✓ |
@@ -308,7 +308,7 @@ whenever they drift. Delete it freely. Embeddings come from
 **The skill solves *when*, the hook makes it stick.** A memory server on its own
 gets called whenever the model happens to think of it, which on a long session
 means less and less. The skill turns it into a fixed per-turn loop. The hook
-re-injects that loop on every prompt for as long as `.context/.sync-on` exists,
+re-injects that loop on every prompt for as long as `.fornix/.sync-on` exists,
 so compaction cannot erode it.
 
 ### What it is not
@@ -334,17 +334,17 @@ so compaction cannot erode it.
 ```
 your prompt
     │
-    ├── hook            re-arms the skill every prompt while .context/.sync-on exists
+    ├── hook            re-arms the skill every prompt while .fornix/.sync-on exists
     ├── skill           select() before answering · write() after acting
     │
-    └── MCP server      .context/context_store/server.py, stdio or HTTP
+    └── MCP server      .fornix/context_store/server.py, stdio or HTTP
             │
-            ├── store       .context/memories/<scope>.jsonl, committed, git is the history
-            └── index       .context/index.db, sqlite-vec, gitignored, rebuilt when it drifts
+            ├── store       .fornix/memories/<scope>.jsonl, committed, git is the history
+            └── index       .fornix/index.db, sqlite-vec, gitignored, rebuilt when it drifts
 ```
 
 ```
-.context/
+.fornix/
   memories/<scope>.jsonl    the store, committed
   index.db                  sqlite-vec index, gitignored, rebuilt when it drifts
   context_store/store.py    the four operations
@@ -354,7 +354,7 @@ skills/context-sync/        the skill, commands and hook the installer copies
 install.sh · setup.py       the installer, twice
 ```
 
-Tests: `uv run --group dev pytest` inside `.context/` for the store,
+Tests: `uv run --group dev pytest` inside `.fornix/` for the store,
 `python3 test_setup.py` at the root for the installer.
 
 ### Releasing
@@ -367,11 +367,11 @@ trusted publishing. A push that does not change the version does nothing.
 
 ## Links
 
-- 📖 [Store and server docs](https://github.com/ZGA2519/context-system/blob/main/.context/README.md)
-- 🔁 [The per-turn protocol, in full](https://github.com/ZGA2519/context-system/blob/main/skills/context-sync/SKILL.md)
-- 📦 [PyPI](https://pypi.org/project/context-system/)
-- 🐛 [Issues](https://github.com/ZGA2519/context-system/issues)
-- 📄 [MIT license](https://github.com/ZGA2519/context-system/blob/main/LICENSE.txt)
+- 📖 [Store and server docs](https://github.com/ZGA2519/fornix/blob/main/.fornix/README.md)
+- 🔁 [The per-turn protocol, in full](https://github.com/ZGA2519/fornix/blob/main/skills/context-sync/SKILL.md)
+- 📦 [PyPI](https://pypi.org/project/fornix/)
+- 🐛 [Issues](https://github.com/ZGA2519/fornix/issues)
+- 📄 [MIT license](https://github.com/ZGA2519/fornix/blob/main/LICENSE.txt)
 
 ---
 

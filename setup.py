@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Install the context system into a repo: store, MCP entry, skill, commands, hook.
+"""Install fornix into a repo: store, MCP entry, skill, commands, hook.
 
 The Python twin of install.sh, for machines without a POSIX sh and for running as a
-tool: `uv run context-system` in a checkout, or without one
-`uvx --from git+https://github.com/ZGA2519/context-system context-system`.
-Idempotent, re-run to update an install. An existing .context/memories/ is never touched.
+tool: `uv run fornix` in a checkout, or without one
+`uvx --from git+https://github.com/ZGA2519/fornix fornix`.
+Idempotent, re-run to update an install. An existing .fornix/memories/ is never touched.
 Run with no answers on a terminal and it asks for them; -y takes the defaults.
 """
 import argparse
@@ -20,9 +20,9 @@ import tempfile
 from collections import Counter
 from pathlib import Path
 
-REPO_URL = "https://github.com/ZGA2519/context-system.git"
+REPO_URL = "https://github.com/ZGA2519/fornix.git"
 CLIENT_FLAGS = ["--claude", "--codex", "--gemini", "--agy", "--vscode"]
-MCP_ENTRY = {"command": "uv", "args": ["run", "--directory", ".context", "python", "-m", "context_store.server", "mcp"]}
+MCP_ENTRY = {"command": "uv", "args": ["run", "--directory", ".fornix", "python", "-m", "context_store.server", "mcp"]}
 HOOK_CMD = '"$CLAUDE_PROJECT_DIR"/.claude/hooks/context-sync.sh'
 
 USAGE = """\
@@ -31,8 +31,8 @@ USAGE = """\
 DESCRIPTION = """\
 Installs into TARGET_REPO (default: the current directory):
 
-  .context/                             the store and MCP server
-  .mcp.json                             mcpServers.context-system, merged in
+  .fornix/                             the store and MCP server
+  .mcp.json                             mcpServers.fornix, merged in
   .claude/skills/context-sync/          the skill
   .claude/commands/context-*.md         /context-start-sync, -readonly, /context-stop-sync
   .claude/hooks/context-sync.sh         per-prompt loop re-injection
@@ -42,16 +42,16 @@ Installs into TARGET_REPO (default: the current directory):
 
   --no-hook   skip the last two; the skill alone drives the loop
   --claude --codex --gemini --agy --vscode
-              also register the server with those clients, via .context/setup.sh
+              also register the server with those clients, via .fornix/setup.sh
 
 Anything not given is asked for interactively when there is a terminal. -y (--yes)
 answers every question with its default instead: the current directory, the hook on,
 no extra clients.
 
 --set-root      the other job: FOLDER (default: the current directory) is a workspace
-                folder opened over several repos. Finds every repo with a .context/
+                folder opened over several repos. Finds every repo with a .fornix/
                 install up to 5 levels below it, asks which should join, and runs each
-                one's .context/setup.sh --set-root FOLDER. -y takes them all."""
+                one's .fornix/setup.sh --set-root FOLDER. -y takes them all."""
 
 if os.name == "nt":
     os.system("")  # ponytail: the documented hack that turns on ANSI escapes in conhost
@@ -266,7 +266,7 @@ def ask_path(src):
         elif not p.is_dir():
             why = "no such directory"
         elif p.resolve() == src:
-            why = "that is the context-system checkout; pass the repo to install into"
+            why = "that is the fornix checkout; pass the repo to install into"
         else:
             q_done(1, title, p.resolve())
             return p.resolve()
@@ -274,11 +274,11 @@ def ask_path(src):
 
 
 def find_repos(root, depth=5):
-    """Repos with an install (.context/setup.sh) up to `depth` directories below root."""
+    """Repos with an install (.fornix/setup.sh) up to `depth` directories below root."""
     found = []
     for d, dirs, _ in os.walk(root):
         d = Path(d)
-        if d != root and ".context" in dirs and (d / ".context/setup.sh").is_file():
+        if d != root and ".fornix" in dirs and (d / ".fornix/setup.sh").is_file():
             found.append(d)
         deep = len(d.relative_to(root).parts) >= depth
         dirs[:] = [] if deep else sorted(n for n in dirs if not n.startswith(".") and n != "node_modules")
@@ -292,29 +292,29 @@ def set_root(root, yes):
         sys.exit(f"install: no such directory: {root}")
     repos = find_repos(root)
     if not repos:
-        sys.exit(f"install: no repo with a .context/ install within 5 levels below {root}")
+        sys.exit(f"install: no repo with a .fornix/ install within 5 levels below {root}")
     reg = root / ".claude/context-sync.repos"
     known = {line.split(" ", 1)[1] for line in reg.read_text().splitlines() if " " in line} if reg.is_file() else set()
     items = [(str(r.relative_to(root)), "already registered here" if str(r) in known else "") for r in repos]
     picks = list(range(1, len(items) + 1))
     if not yes and sys.stdin.isatty() and sys.stdout.isatty():
-        print(f"\n{M}▌{R} {B}context-system{R} {D}workspace folder{R} {C}{root}{R}\n")
+        print(f"\n{M}▌{R} {B}fornix{R} {D}workspace folder{R} {C}{root}{R}\n")
         picks = ask_multi("which repos should join this folder?", items, default=picks)
         if not picks:
             print(f"  {D}nothing picked, nothing done{R}")
             return
     for i in picks:  # ponytail: shells out to setup.sh; port its set_root here if Windows needs this
         try:
-            subprocess.run(["sh", str(repos[i - 1] / ".context/setup.sh"), "--set-root", str(root)])
+            subprocess.run(["sh", str(repos[i - 1] / ".fornix/setup.sh"), "--set-root", str(root)])
         except OSError:
-            sys.exit(f"install: no sh on PATH; run {repos[i - 1]}/.context/setup.sh --set-root {root} from a shell that has one")
+            sys.exit(f"install: no sh on PATH; run {repos[i - 1]}/.fornix/setup.sh --set-root {root} from a shell that has one")
 
 
 def release_ref():
     """--branch v<version> when installed from PyPI, so 0.1.1 installs the 0.1.1 tree.
     Nothing (main) when installed from a git URL or path: direct_url.json marks those."""
     try:
-        dist = importlib.metadata.distribution("context-system")
+        dist = importlib.metadata.distribution("fornix")
     except importlib.metadata.PackageNotFoundError:
         return []
     return [] if dist.read_text("direct_url.json") else ["--branch", "v" + dist.version]
@@ -323,16 +323,16 @@ def release_ref():
 def source():
     """The checkout this file sits in, or a fresh shallow clone when installed as a tool."""
     src = Path(__file__).resolve().parent
-    if (src / ".context").is_dir():
+    if (src / ".fornix").is_dir():
         return src
-    tmp = tempfile.TemporaryDirectory(prefix="context-system-")
+    tmp = tempfile.TemporaryDirectory(prefix="fornix-")
     atexit.register(tmp.cleanup)
     cmd = ["git", "clone", "--quiet", "--depth", "1", *release_ref(), REPO_URL, tmp.name]
     try:  # git still chatters on stderr for a shallow tag clone, so keep it unless it failed
         subprocess.run(cmd, check=True, capture_output=True, text=True)
     except (OSError, subprocess.CalledProcessError) as e:
         why = (getattr(e, "stderr", None) or str(e)).strip()
-        sys.exit(f"install: {src} is not a context-system checkout and cloning {REPO_URL} failed:\n{why}")
+        sys.exit(f"install: {src} is not a fornix checkout and cloning {REPO_URL} failed:\n{why}")
     return Path(tmp.name)
 
 
@@ -357,7 +357,7 @@ def main(argv=None):
 
     if not a.yes and sys.stdin.isatty() and sys.stdout.isatty() and (
             target is None or a.hook is None or not got_clients):
-        print(f"\n{M}▌{R} {B}context-system{R} {D}installer{R}\n")
+        print(f"\n{M}▌{R} {B}fornix{R} {D}installer{R}\n")
         if target is None:
             target = ask_path(src)
         if a.hook is None:
@@ -371,8 +371,8 @@ def main(argv=None):
             clients = [CLIENT_FLAGS[p] for p in picks]  # 1-based picks skip --claude at index 0
             print(f"  {D}claude code is covered by .mcp.json, written either way{R}")
         print(f"\n  {C}{target}{R} {D}·{R} hook {'on' if a.hook else 'off'} {D}·{R} clients {' '.join(clients) or 'none'}")
-        if (target / ".context/memories").is_dir():
-            print(f"  {D}an install is already there; .context/memories/ is kept as is{R}")
+        if (target / ".fornix/memories").is_dir():
+            print(f"  {D}an install is already there; .fornix/memories/ is kept as is{R}")
         print()
         if not ask_yesno("write it?"):
             print(f"  {Y}! cancelled, nothing written{R}")
@@ -387,50 +387,61 @@ def main(argv=None):
     if target == src:
         sys.exit("install: target is the source checkout; pass the repo to install into")
 
-    print(f"{M}▌{R} {B}context-system{R} {D}→{R} {target}\n")
+    print(f"{M}▌{R} {B}fornix{R} {D}→{R} {target}\n")
 
-    # --- .context/ ---------------------------------------------------------
+    # --- .context/ → .fornix/ ----------------------------------------------
+    # Installs from before the rename keep the store in .context/. Move it whole so
+    # memories/, .sync-on and the built index come along.
+    old = target / ".context"
+    if (old / "context_store").is_dir():
+        if (target / ".fornix").exists():
+            say(".context/", "skipped, .fornix/ is there too; move memories/ over by hand")
+        else:
+            old.rename(target / ".fornix")
+            say(".fornix/", "moved from .context/")
+
+    # --- .fornix/ ---------------------------------------------------------
     # Everything but memories/, which is the user's data and is handled separately below.
     def skip(d, names):
-        top = Path(d) == src / ".context"
+        top = Path(d) == src / ".fornix"
         return {n for n in names if n in ("__pycache__", ".DS_Store") or top and (
             n in (".venv", ".pytest_cache", ".sync-on", "memories") or n.startswith("index.db"))}
-    shutil.copytree(src / ".context", target / ".context", ignore=skip, dirs_exist_ok=True)
-    say(".context/", "server, store code, pyproject")
+    shutil.copytree(src / ".fornix", target / ".fornix", ignore=skip, dirs_exist_ok=True)
+    say(".fornix/", "server, store code, pyproject")
 
-    # --- .context/memories/ ------------------------------------------------
+    # --- .fornix/memories/ ------------------------------------------------
     # If memories/ is already there we do not touch it at all. Only a fresh install gets the seeds.
-    mem = target / ".context/memories"
+    mem = target / ".fornix/memories"
     if mem.exists():
         if not mem.is_dir():
             sys.exit(f"install: {mem} exists but is not a directory")
         n = sum(1 for f in mem.rglob("*.jsonl") if f.is_file())
-        say(".context/memories/", f"kept as is, {n} store{'' if n == 1 else 's'} already there")
+        say(".fornix/memories/", f"kept as is, {n} store{'' if n == 1 else 's'} already there")
     else:
         mem.mkdir(parents=True)
-        seeds = sorted((src / ".context/memories").glob("*.jsonl"))
+        seeds = sorted((src / ".fornix/memories").glob("*.jsonl"))
         for f in seeds:
             shutil.copy(f, mem)
-        say(".context/memories/", "created, empty: " + " ".join(f.name for f in seeds))
+        say(".fornix/memories/", "created, empty: " + " ".join(f.name for f in seeds))
 
     # --- .mcp.json ---------------------------------------------------------
     p = target / ".mcp.json"
     doc = load_json(p)
     servers = doc.setdefault("mcpServers", {})
-    # the server was called "context" before; drop that key so a re-install does not
-    # leave two entries launching two processes against the same store
-    legacy = servers.get("context")
-    stale = bool(legacy) and legacy.get("command") == "uv" and any(".context" in str(x) for x in legacy.get("args", []))
-    if stale:
-        del servers["context"]
-    if servers.get("context-system") == MCP_ENTRY and not stale:
+    # the server was called "context", then "context-system", both run from .context/;
+    # drop those keys so a re-install does not leave two processes on the same store
+    stale = [k for k in ("context", "context-system") if (v := servers.get(k)) and v.get("command") == "uv"
+             and any(".context" in str(x) for x in v.get("args", []))]
+    for k in stale:
+        del servers[k]
+    if servers.get("fornix") == MCP_ENTRY and not stale:
         result = "already present"
     else:
-        result = "replaced" if "context-system" in servers else "added"
-        servers["context-system"] = MCP_ENTRY
+        result = "replaced" if "fornix" in servers else "added"
+        servers["fornix"] = MCP_ENTRY
         save_json(p, doc)
-        result += ', legacy "context" entry removed' if stale else ""
-    say(".mcp.json", f"mcpServers.context-system {result}")
+        result += "".join(f', legacy "{k}" entry removed' for k in stale)
+    say(".mcp.json", f"mcpServers.fornix {result}")
 
     # --- skill and commands ------------------------------------------------
     skill = src / "skills/context-sync"
@@ -486,25 +497,25 @@ def main(argv=None):
         print(f"  {Y}! uv is not on PATH. The server needs it: https://docs.astral.sh/uv/{R}")
 
     sec("next, in that repo")
-    print(f'  {M}1{R}  restart Claude Code and approve the "context-system" server (or /mcp)')
+    print(f'  {M}1{R}  restart Claude Code and approve the "fornix" server (or /mcp)')
     print(f"  {M}2{R}  {C}/context-start-sync{R}            recall + capture every prompt")
     print(f"     {C}/context-start-sync-readonly{R}   recall only, never writes")
     print(f"     {C}/context-stop-sync{R}             off")
-    print(f"  {M}3{R}  commit .context/memories/ with your code; the rest of .context/ is gitignored")
+    print(f"  {M}3{R}  commit .fornix/memories/ with your code; the rest of .fornix/ is gitignored")
 
     # --- other agents ------------------------------------------------------
     # Claude Code reads .mcp.json, written above. Every other client is one command
-    # away; setup.sh travels with .context/ so teammates without this checkout have it too.
+    # away; setup.sh travels with .fornix/ so teammates without this checkout have it too.
     if clients:
         sec("registering with " + " ".join(clients))
         try:
-            subprocess.run(["sh", str(target / ".context/setup.sh"), *clients])
+            subprocess.run(["sh", str(target / ".fornix/setup.sh"), *clients])
         except OSError:
-            print(f"  {Y}! no sh on PATH; run .context/setup.sh {' '.join(clients)} from a shell that has one{R}")
+            print(f"  {Y}! no sh on PATH; run .fornix/setup.sh {' '.join(clients)} from a shell that has one{R}")
     else:
         sec("other clients")
-    print(f"  .context/setup.sh                                   {D}asks: clients, workspace folder{R}")
-    print(f"  .context/setup.sh --codex --set-root <folder>       {D}--print just lists the commands{R}")
+    print(f"  .fornix/setup.sh                                   {D}asks: clients, workspace folder{R}")
+    print(f"  .fornix/setup.sh --codex --set-root <folder>       {D}--print just lists the commands{R}")
     print(f"  {ap.prog} <folder> --set-root {' ' * max(0, 30 - len(ap.prog))}{D}finds the repos below a folder, asks which join{R}")
 
 

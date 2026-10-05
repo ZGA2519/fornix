@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
-# Install the context system into a repo: store, MCP entry, skill, commands, hook.
-# Idempotent — re-run to update an install. An existing .context/memories/ is never touched.
+# Install fornix into a repo: store, MCP entry, skill, commands, hook.
+# Idempotent — re-run to update an install. An existing .fornix/memories/ is never touched.
 # Run with no answers on a terminal and it asks for them, vite-style; -y takes the defaults.
 set -eu
 
@@ -17,8 +17,8 @@ usage: ./install.sh [TARGET_REPO] [-y] [--no-hook] [--claude] [--codex] [--gemin
 
 Installs into TARGET_REPO (default: the current directory):
 
-  .context/                             the store and MCP server
-  .mcp.json                             mcpServers.context-system, merged in
+  .fornix/                             the store and MCP server
+  .mcp.json                             mcpServers.fornix, merged in
   .claude/skills/context-sync/          the skill
   .claude/commands/context-*.md         /context-start-sync, -readonly, /context-stop-sync
   .claude/hooks/context-sync.sh         per-prompt loop re-injection
@@ -28,7 +28,7 @@ Installs into TARGET_REPO (default: the current directory):
 
   --no-hook   skip the last two; the skill alone drives the loop
   --claude --codex --gemini --agy --vscode
-              also register the server with those clients, via .context/setup.sh
+              also register the server with those clients, via .fornix/setup.sh
 
 Anything not given is asked for interactively when there is a terminal. -y (--yes)
 answers every question with its default instead: the current directory, the hook on,
@@ -49,7 +49,7 @@ for arg in "$@"; do
   esac
 done
 
-[ -d "$SRC/.context" ] || { echo "install: run this from a context-system checkout ($SRC has no .context/)" >&2; exit 1; }
+[ -d "$SRC/.fornix" ] || { echo "install: run this from a fornix checkout ($SRC has no .fornix/)" >&2; exit 1; }
 
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
   B=$(printf '\033[1m') D=$(printf '\033[2m') R=$(printf '\033[0m')
@@ -219,7 +219,7 @@ ask_path() {
     elif [ ! -d "$_ans" ]; then _why="no such directory"
     else
       _ans=$(CDPATH= cd -- "$_ans" && pwd)
-      [ "$_ans" != "$SRC" ] || _why="that is the context-system checkout; pass the repo to install into"
+      [ "$_ans" != "$SRC" ] || _why="that is the fornix checkout; pass the repo to install into"
     fi
     if [ -n "$_why" ]; then printf '  %s! %s%s\n' "$Y" "$_why" "$R"; continue; fi
     printf '\033[1A\033[J%s✔%s install into which repo? %s›%s %s%s%s\n' \
@@ -238,7 +238,7 @@ fi
 if [ "$WIZARD" = 1 ]; then
   trap 'raw_off' EXIT HUP TERM
   trap 'bail' INT
-  printf '\n%s▌%s %scontext-system%s %sinstaller%s\n\n' "$M" "$R" "$B" "$R" "$D" "$R"
+  printf '\n%s▌%s %sfornix%s %sinstaller%s\n\n' "$M" "$R" "$B" "$R" "$D" "$R"
 
   [ -n "$TARGET" ] || ask_path
 
@@ -266,8 +266,8 @@ if [ "$WIZARD" = 1 ]; then
   printf '\n  %s%s%s %s·%s hook %s %s·%s clients%s\n' \
     "$C" "$TARGET" "$R" "$D" "$R" "$([ "$WANT_HOOK" = 1 ] && echo on || echo off)" \
     "$D" "$R" "${CLIENTS:- none}"
-  [ ! -d "$TARGET/.context/memories" ] ||
-    printf '  %san install is already there; .context/memories/ is kept as is%s\n' "$D" "$R"
+  [ ! -d "$TARGET/.fornix/memories" ] ||
+    printf '  %san install is already there; .fornix/memories/ is kept as is%s\n' "$D" "$R"
   echo
   ask_yesno "write it?" 1
   [ "$YESNO" = 1 ] || { printf '  %s! cancelled, nothing written%s\n' "$Y" "$R"; exit 130; }
@@ -299,40 +299,52 @@ say() {
   esac
   printf '  %s%s %s%-28s%s %s%s%s\n' "$g" "$R" "$C" "$1" "$R" "$c" "$2" "$R"
 }
-printf '%s▌%s %scontext-system%s %s→%s %s\n\n' "$M" "$R" "$B" "$R" "$D" "$R" "$TARGET"
+printf '%s▌%s %sfornix%s %s→%s %s\n\n' "$M" "$R" "$B" "$R" "$D" "$R" "$TARGET"
 
-# --- .context/ -------------------------------------------------------------
+# --- .context/ → .fornix/ --------------------------------------------------
+# Installs from before the rename keep the store in .context/. Move it whole so
+# memories/, .sync-on and the built index come along.
+if [ -d "$TARGET/.context/context_store" ]; then
+  if [ -e "$TARGET/.fornix" ]; then
+    say .context/ "skipped, .fornix/ is there too; move memories/ over by hand"
+  else
+    mv "$TARGET/.context" "$TARGET/.fornix"
+    say .fornix/ "moved from .context/"
+  fi
+fi
+
+# --- .fornix/ -------------------------------------------------------------
 # Everything but memories/, which is the user's data and is handled separately below.
 (cd "$SRC" && tar cf - \
-    --exclude '.context/.venv' \
-    --exclude '.context/index.db*' \
-    --exclude '.context/.pytest_cache' \
-    --exclude '.context/.sync-on' \
-    --exclude '.context/memories' \
+    --exclude '.fornix/.venv' \
+    --exclude '.fornix/index.db*' \
+    --exclude '.fornix/.pytest_cache' \
+    --exclude '.fornix/.sync-on' \
+    --exclude '.fornix/memories' \
     --exclude '*/__pycache__' \
     --exclude '*.DS_Store' \
-    .context) | (cd "$TARGET" && tar xf -)
-say .context/ "server, store code, pyproject"
+    .fornix) | (cd "$TARGET" && tar xf -)
+say .fornix/ "server, store code, pyproject"
 
-# --- .context/memories/ ----------------------------------------------------
+# --- .fornix/memories/ ----------------------------------------------------
 # The user's data. If memories/ is already there we do not touch it at all: no
 # seeding, no merging, no new files. Only a fresh install gets the seed stores.
-if [ -e "$TARGET/.context/memories" ]; then
-  [ -d "$TARGET/.context/memories" ] || {
-    echo "install: $TARGET/.context/memories exists but is not a directory" >&2
+if [ -e "$TARGET/.fornix/memories" ]; then
+  [ -d "$TARGET/.fornix/memories" ] || {
+    echo "install: $TARGET/.fornix/memories exists but is not a directory" >&2
     exit 1
   }
-  n=$(find "$TARGET/.context/memories" -type f -name '*.jsonl' | wc -l | tr -d ' ')
-  say .context/memories/ "kept as is, $n store$([ "$n" = 1 ] || echo s) already there"
+  n=$(find "$TARGET/.fornix/memories" -type f -name '*.jsonl' | wc -l | tr -d ' ')
+  say .fornix/memories/ "kept as is, $n store$([ "$n" = 1 ] || echo s) already there"
 else
-  mkdir -p "$TARGET/.context/memories"
+  mkdir -p "$TARGET/.fornix/memories"
   stores=""
-  for f in "$SRC"/.context/memories/*.jsonl; do
+  for f in "$SRC"/.fornix/memories/*.jsonl; do
     [ -e "$f" ] || continue
-    cp "$f" "$TARGET/.context/memories/"
+    cp "$f" "$TARGET/.fornix/memories/"
     stores="$stores $(basename -- "$f")"
   done
-  say .context/memories/ "created, empty:$stores"
+  say .fornix/memories/ "created, empty:$stores"
 fi
 
 # --- .mcp.json -------------------------------------------------------------
@@ -346,27 +358,27 @@ if p.exists() and p.read_text().strip():
         doc = json.loads(p.read_text())
     except json.JSONDecodeError as e:
         sys.exit(f"{p} is not valid JSON ({e}); fix or move it and re-run")
-want = {"command": "uv", "args": ["run", "--directory", ".context", "python", "-m", "context_store.server", "mcp"]}
+want = {"command": "uv", "args": ["run", "--directory", ".fornix", "python", "-m", "context_store.server", "mcp"]}
 servers = doc.setdefault("mcpServers", {})
-# the server was called "context" before; drop that key so a re-install does not
-# leave two entries launching two processes against the same store
-legacy = servers.get("context")
-stale = bool(legacy) and legacy.get("command") == "uv" and any(".context" in str(a) for a in legacy.get("args", []))
-if stale:
-    del servers["context"]
-if servers.get("context-system") == want and not stale:
+# the server was called "context", then "context-system", both run from .context/;
+# drop those keys so a re-install does not leave two processes on the same store
+stale = [k for k in ("context", "context-system") if (v := servers.get(k)) and v.get("command") == "uv"
+         and any(".context" in str(a) for a in v.get("args", []))]
+for k in stale:
+    del servers[k]
+if servers.get("fornix") == want and not stale:
     print("already present")
 else:
-    verb = "replaced" if "context-system" in servers else "added"
-    servers["context-system"] = want
+    verb = "replaced" if "fornix" in servers else "added"
+    servers["fornix"] = want
     p.write_text(json.dumps(doc, indent=2) + "\n")
-    print(verb + (', legacy "context" entry removed' if stale else ""))
+    print(verb + "".join(f', legacy "{k}" entry removed' for k in stale))
 PY
 )
-  say .mcp.json "mcpServers.context-system $result"
+  say .mcp.json "mcpServers.fornix $result"
 else
   say .mcp.json "skipped, no python3. add by hand:" >&2
-  echo '    {"mcpServers": {"context-system": {"command": "uv", "args": ["run", "--directory", ".context", "python", "-m", "context_store.server", "mcp"]}}}' >&2
+  echo '    {"mcpServers": {"fornix": {"command": "uv", "args": ["run", "--directory", ".fornix", "python", "-m", "context_store.server", "mcp"]}}}' >&2
 fi
 
 # --- skill and commands ----------------------------------------------------
@@ -436,21 +448,21 @@ printf '\n  %s%s updated%s %s·%s %s%s unchanged%s %s·%s %s%s skipped%s\n' \
 command -v uv >/dev/null 2>&1 || printf '  %s! uv is not on PATH. The server needs it: https://docs.astral.sh/uv/%s\n' "$Y" "$R"
 
 sec "next, in that repo"
-printf '  %s1%s  restart Claude Code and approve the "context-system" server (or /mcp)\n' "$M" "$R"
+printf '  %s1%s  restart Claude Code and approve the "fornix" server (or /mcp)\n' "$M" "$R"
 printf '  %s2%s  %s/context-start-sync%s            recall + capture every prompt\n' "$M" "$R" "$C" "$R"
 printf '     %s/context-start-sync-readonly%s   recall only, never writes\n' "$C" "$R"
 printf '     %s/context-stop-sync%s             off\n' "$C" "$R"
-printf '  %s3%s  commit .context/memories/ with your code; the rest of .context/ is gitignored\n' "$M" "$R"
+printf '  %s3%s  commit .fornix/memories/ with your code; the rest of .fornix/ is gitignored\n' "$M" "$R"
 
 # --- other agents ----------------------------------------------------------
 # Claude Code reads .mcp.json, written above. Every other client is one command
-# away; setup.sh travels with .context/ so teammates without this checkout have it too.
+# away; setup.sh travels with .fornix/ so teammates without this checkout have it too.
 if [ -n "$CLIENTS" ]; then
   sec "registering with$CLIENTS"
   # shellcheck disable=SC2086  # CLIENTS is a flag list, splitting is the point
-  sh "$TARGET/.context/setup.sh" $CLIENTS
+  sh "$TARGET/.fornix/setup.sh" $CLIENTS
 else
   sec "other clients"
 fi
-printf '  .context/setup.sh                                   %sasks: clients, workspace folder%s\n' "$D" "$R"
-printf '  .context/setup.sh --codex --set-root <folder>       %s--print just lists the commands%s\n' "$D" "$R"
+printf '  .fornix/setup.sh                                   %sasks: clients, workspace folder%s\n' "$D" "$R"
+printf '  .fornix/setup.sh --codex --set-root <folder>       %s--print just lists the commands%s\n' "$D" "$R"

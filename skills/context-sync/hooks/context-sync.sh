@@ -4,10 +4,10 @@
 # The flag file's contents are the mode: "readonly" for recall-only, anything
 # else (including empty) for full recall + capture.
 #
-# Two layouts, both driven by <repo>/.context/.sync-on:
-#   a repo opened on its own   the flag beside this project, server "context-system"
+# Two layouts, both driven by <repo>/.fornix/.sync-on:
+#   a repo opened on its own   the flag beside this project, server "fornix"
 #   a workspace folder over    .claude/context-sync.repos lists "<server> <repo path>"
-#   several repos              for every repo added with .context/setup.sh --set-root;
+#   several repos              for every repo added with .fornix/setup.sh --set-root;
 #                              each repo's own flag arms its own server
 cat > /dev/null  # drain the stdin JSON; leaving it unread can trip the hook handler
 
@@ -21,12 +21,15 @@ arm() {
 join()  { _j=""; for _w in $1; do _j="$_j${_j:+, }$_w"; done; printf %s "$_j"; }
 count() { set -- $1; echo $#; }
 
-[ ! -f "$PD/.context/.sync-on" ] || arm context-system "$PD/.context/.sync-on"
+[ ! -f "$PD/.fornix/.sync-on" ] || arm fornix "$PD/.fornix/.sync-on"
 if [ -f "$PD/.claude/context-sync.repos" ]; then
   while IFS= read -r line; do
     [ -n "$line" ] || continue
     server=${line%% *} dir=${line#* }
-    [ ! -f "$dir/.context/.sync-on" ] || arm "$server" "$dir/.context/.sync-on"
+    # .context/ is where a member installed before the rename keeps its flag
+    for f in "$dir/.fornix/.sync-on" "$dir/.context/.sync-on"; do
+      [ ! -f "$f" ] || { arm "$server" "$f"; break; }
+    done
   done < "$PD/.claude/context-sync.repos"
 fi
 [ -n "$FULL$RO" ] || exit 0
