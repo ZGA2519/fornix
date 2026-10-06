@@ -14,7 +14,7 @@ import re
 import sqlite3
 import threading
 import uuid
-from collections import Counter
+from collections import Counter, defaultdict
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -26,6 +26,23 @@ ROOT = Path(os.environ.get("CONTEXT_DIR", Path(__file__).resolve().parent.parent
 MODEL = os.environ.get("CONTEXT_EMBED_MODEL", "BAAI/bge-small-en-v1.5")
 SCOPE_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}")  # a scope becomes a filename, keep it boring
 MAX_K = 100
+# memories are committed to git, so refuse anything shaped like a credential before it reaches the file
+# ponytail: known token shapes, not an entropy scan; swap in detect-secrets if one slips past
+SECRET_RE = re.compile(
+    r"\bAKIA[0-9A-Z]{16}"  # AWS access key
+    r"|\bgh[pousr]_[A-Za-z0-9]{36}|github_pat_\w{22,}"  # GitHub
+    r"|\bsk-[A-Za-z0-9_-]{20,}"  # OpenAI, Anthropic
+    r"|\bxox[abprs]-[A-Za-z0-9-]{10,}"  # Slack
+    r"|-----BEGIN [A-Z ]*PRIVATE KEY-----"
+    r"|eyJ[\w-]{10,}\.eyJ[\w-]{10,}\."  # JWT
+    r"|\w+://[^\s:/@]+:[^\s@/$<{*][^\s@/]*@"  # user:password@ in a URL; $VAR, <pw>, {pw}, *** pass
+    r"|(?i:passw(?:or)?d|secret|api[_-]?key|token)\s*[:=]\s*['\"]?(?=[^\s'\"]*\d)[^\s'\"]{6,}"  # key = value with a digit
+)
+
+
+def _refuse_secrets(text: str):
+    if SECRET_RE.search(text):
+        raise ValueError("text looks like it holds a secret: store where it lives (env var name, vault path), never the value")
 
 
 def _now() -> str:
@@ -61,7 +78,7 @@ class Store:
         self._stamp: tuple | None = None
         self._init_index()
 
-    # ---- the four operations ------------------------------------------------
+    # ---- the operations ------------------------------------------------------
 
     @_serialized
     def write(self, text: str, scope: str = "main", tags=(), source: str = "", supersedes=(), origin: str = "", id: str = "") -> dict:
@@ -70,6 +87,7 @@ class Store:
         text = text.strip()
         if not text:
             raise ValueError("text is empty")
+        _refuse_secrets(text)  # before the id branch, so a refused correction leaves the old memory alone
         if id:
             old = self._remove([id])[0]
             tags, source = tags or old["tags"], source or old["source"]
@@ -109,6 +127,7 @@ class Store:
         if summary.strip():
             if not ids:
                 raise ValueError("summary needs the ids it replaces")
+            _refuse_secrets(summary)  # before _remove, or a refused summary would take its originals with it
             gone = self._remove(ids)
             tags = {t for r in gone for t in r["tags"]}
             source = ", ".join(sorted({r["source"] for r in gone if r["source"]}))
@@ -147,10 +166,19 @@ class Store:
         return {"scope": scope, "seeded": seeded, "memories": self.select("", scope, k=MAX_K)}
 
     @_serialized
+    def forget(self, ids) -> dict:
+        """Delete memories by id, from any scope. git keeps the old lines."""
+        return {"removed": sorted(r["id"] for r in self._remove(ids))}
+
+    @_serialized
     def scopes(self) -> list[dict]:
+        """Every scope with its memory count and tag counts, most used tag first."""
         self._sync()
-        n = Counter(r["scope"] for r in self._records.values())
-        return [{"scope": f.stem, "count": n.get(f.stem, 0)} for f in self._files()]
+        n, tags = Counter(), defaultdict(Counter)
+        for r in self._records.values():
+            n[r["scope"]] += 1
+            tags[r["scope"]].update(r["tags"])
+        return [{"scope": f.stem, "count": n[f.stem], "tags": dict(tags[f.stem].most_common())} for f in self._files()]
 
     # ---- plumbing -----------------------------------------------------------
 

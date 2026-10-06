@@ -83,6 +83,21 @@ def isolate(scope: str, seed_from: str = "", query: str = "", k: int = 8, tags: 
     return store.isolate(scope, seed_from, query, k, tags or [])
 
 
+@mcp.tool()
+@_surface
+def forget(ids: list[str]) -> dict:
+    """Delete memories by id, from any scope, when a fact is wrong or obsolete. To fix one instead, write(id=...).
+    git keeps the deleted lines."""
+    return store.forget(ids)
+
+
+@mcp.tool()
+def scopes() -> list[dict]:
+    """Map of what project memory holds: every scope with its memory count and tag counts, most used first.
+    Tags are the topics; select(tags=[...]) recalls one."""
+    return store.scopes()
+
+
 @asynccontextmanager
 async def _lifespan(_app):
     async with mcp.session_manager.run():
@@ -118,6 +133,11 @@ def compress_api(scope: str = Body("main"), ids: list[str] = Body([]), summary: 
 @api.post("/isolate")
 def isolate_api(scope: str = Body(), seed_from: str = Body(""), query: str = Body(""), k: int = Body(8), tags: list[str] = Body([])):
     return store.isolate(scope, seed_from, query, k, tags)
+
+
+@api.post("/forget")
+def forget_api(ids: list[str] = Body(embed=True)):
+    return store.forget(ids)
 
 
 def main():
