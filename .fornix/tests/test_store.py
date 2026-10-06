@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from context_store.store import Store
 
 
@@ -30,7 +32,7 @@ def test_write_select_compress_isolate(tmp_path: Path):
     ids = {r["id"] for r in s.select("", "task-auth", k=10)}
     out = s.compress("main", ids, "Auth: argon2 passwords, 12h JWT")
     assert set(out["removed"]) == ids and set(out["kept"]["supersedes"]) == ids
-    assert s.scopes() == [{"scope": "main", "count": 3}, {"scope": "task-auth", "count": 0}]
+    assert s.scopes() == [{"scope": "main", "count": 3, "tags": {"auth": 2, "front": 1}}, {"scope": "task-auth", "count": 0, "tags": {}}]
 
     # the JSONL is the truth: hand-edit it and the index follows
     f = tmp_path / "memories" / "main.jsonl"
@@ -39,3 +41,17 @@ def test_write_select_compress_isolate(tmp_path: Path):
 
     # a second Store on the same folder (another AI session) sees the same memory
     assert Store(tmp_path).select("", k=10) == s.select("", k=10)
+
+    # secrets are refused before anything changes, so a refused correction keeps the old memory
+    for leak in ["key AKIAABCDEFGHIJKLMNOP", "db is postgres://app:s3cretpw@db:5432/x", "password = hunter2"]:
+        with pytest.raises(ValueError, match="secret"):
+            s.write(leak, id=up["id"])
+    with pytest.raises(ValueError, match="secret"):
+        s.compress("main", [up["id"]], "Frontend, deploy key AKIAABCDEFGHIJKLMNOP")
+    assert up["id"] in {r["id"] for r in s.select("", k=10)}
+
+    # look-alikes pass, and forget deletes by id
+    ok = s.write("Clients send the token: Authorization header from task-auth-refactor-notes, password in $DB_PASSWORD")
+    assert s.forget([ok["id"]]) == {"removed": [ok["id"]]}
+    with pytest.raises(KeyError):
+        s.forget([ok["id"]])

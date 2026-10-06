@@ -5,11 +5,11 @@ description: Drives the `fornix` MCP server (project memory - write/select/compr
 
 # context-sync
 
-The `fornix` MCP server is a shared project memory: `memories/<scope>.jsonl` committed to git, a sqlite-vec index rebuilt from it, four operations. It works fine on its own — the problem it does not solve is *when* to call it. This skill supplies the when: two commands that flip a per-turn discipline on and off.
+The `fornix` MCP server is a shared project memory: `memories/<scope>.jsonl` committed to git, a sqlite-vec index rebuilt from it, six tools. It works fine on its own — the problem it does not solve is *when* to call it. This skill supplies the when: two commands that flip a per-turn discipline on and off.
 
 ## The server
 
-Launched by `.mcp.json` at the repo root as `uv run --directory .fornix python -m context_store.server mcp`. Four tools:
+Launched by `.mcp.json` at the repo root as `uv run --directory .fornix python -m context_store.server mcp`. Six tools:
 
 | tool | args | use |
 | --- | --- | --- |
@@ -17,6 +17,8 @@ Launched by `.mcp.json` at the repo root as `uv run --directory .fornix python -
 | `write` | `text`, `scope="main"`, `tags=[]`, `source=""`, `id=""` | Save one fact. Returns the memory with its `id`. Pass an existing `id` to replace that memory in place. |
 | `compress` | `scope="main"`, `ids=[]`, `summary=""`, `threshold=0.92` | `ids` + `summary`: replace those with one summary. Neither: merge near-duplicates, newest kept. |
 | `isolate` | `scope`, `seed_from=""`, `query=""`, `k=8`, `tags=[]` | Open a private scope, optionally seeded with the top `k` of another. |
+| `forget` | `ids` | Delete those memories, from any scope. For a wrong or obsolete fact; to fix one, `write(id=...)`. |
+| `scopes` | | Every scope with its memory count and tag counts. Tags are the topics. |
 
 Scope names are `[a-z0-9._-]`, 64 chars max, one JSONL file each. `main` is the shared default.
 

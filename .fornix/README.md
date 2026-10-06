@@ -5,7 +5,7 @@ Project memory that every AI session and every model shares, versioned with the 
 ```
 memories/<scope>.jsonl   the store: one memory per line, committed, git is the history
 index.db                 sqlite-vec vector index, gitignored, rebuilt from the JSONL when they drift
-context_store/store.py   the four operations
+context_store/store.py   the operations
 context_store/server.py  MCP server (stdio or HTTP) and a JSON API over the same store
 ```
 
@@ -52,6 +52,8 @@ curl -s localhost:8765/select -d '{"query":"how is auth done"}' -H 'content-type
 | `select` | query, scope=main, k=8, tags | Semantic search, best first with a score. Empty query lists the k newest. |
 | `compress` | scope, ids, summary, threshold=0.92 | ids + summary: replace them with one summary in scope. Nothing: merge near-duplicates, newest kept. |
 | `isolate` | scope, seed_from, query, k, tags | Open a private scope, optionally seeded with the top k memories of another. |
+| `forget` | ids | Delete those memories from any scope. git keeps the old lines. |
+| `scopes` | | Every scope with its memory count and tag counts. Over HTTP: `GET /health`. |
 
 Scope names are `[a-z0-9._-]`, one JSONL file each. `main` is the shared default.
 
@@ -65,7 +67,8 @@ Scope names are `[a-z0-9._-]`, one JSONL file each. `main` is the shared default
 ## Notes
 
 - Test the install on a new machine: `uv run --group dev pytest`.
-- Delete a memory by removing its line from the JSONL. The index resyncs on the next call.
+- Delete a memory with `forget(ids)`, or by removing its line from the JSONL. The index resyncs on the next call.
+- `write` refuses text shaped like a credential (cloud and API keys, tokens, private keys, `user:pass@` URLs, `password = ...`). Store where a secret lives, never the value.
 - Deleting `index.db` or `.venv/` under a running server strands its open handles. Restart it (Claude Code: `/mcp`, reconnect). Tool errors land in the client's MCP log via stderr.
 - Merge conflicts in a JSONL: keep both sides, ids are unique, then run `compress()`.
 - `CONTEXT_EMBED_MODEL` picks any fastembed model. Changing it rebuilds the index.

@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="#quick-start">Quick start</a> ·
-  <a href="#the-four-operations">Four operations</a> ·
+  <a href="#the-operations">Operations</a> ·
   <a href="#how-it-compares">Compare</a> ·
   <a href="https://github.com/ZGA2519/fornix/blob/main/.fornix/README.md">Store &amp; server docs</a> ·
   <a href="https://github.com/ZGA2519/fornix/blob/main/skills/context-sync/SKILL.md">Skill protocol</a> ·
@@ -51,7 +51,7 @@ change that caused it. Any model, any MCP client.
 | | |
 |---|---|
 | 📦 **Store** | `.fornix/memories/*.jsonl`, one fact per line, committed. Git is the history. |
-| 🔌 **Server** | An MCP server over that store. Four tools, a sqlite-vec index for semantic recall, no model inside. |
+| 🔌 **Server** | An MCP server over that store. Six tools, a sqlite-vec index for semantic recall, no model inside. |
 | 🔁 **Discipline** | A skill and a hook that make the session recall *before* it answers and capture *after* it acts, every prompt, until told to stop. |
 | 🌿 **Branches with the code** | Check out a branch or an old tag and you get the memory that was true there, not whatever a central store believes today. |
 | 🤝 **Any model, any client** | Claude writes a memory, Codex reads it, Gemini corrects it. Same store, same file. |
@@ -86,7 +86,7 @@ One store per repo, registered into the workspace folder above them. Each repo s
 
 <h3>🔧 I use Codex, Gemini, Cursor, or want an API</h3>
 
-Any MCP client gets the same four tools. There is also an HTTP service with a JSON API.
+Any MCP client gets the same six tools. There is also an HTTP service with a JSON API.
 
 ```sh
 .fornix/setup.sh --codex --gemini
@@ -201,9 +201,9 @@ tokens, personal data. The store is committed and pushed.
 
 ---
 
-## The four operations
+## The operations
 
-Any MCP client gets the same four tools. Scopes are named JSONL files; `main` is the shared default.
+Any MCP client gets the same six tools. Scopes are named JSONL files; `main` is the shared default.
 
 | tool | args | does |
 | --- | --- | --- |
@@ -211,6 +211,8 @@ Any MCP client gets the same four tools. Scopes are named JSONL files; `main` is
 | `write` | `text`, `scope=main`, `tags`, `source`, `id` | Save one fact. Pass an existing `id` to replace that memory in place. |
 | `compress` | `scope`, `ids`, `summary`, `threshold=0.92` | `ids` + `summary`: fold those memories into one. Neither: merge near-duplicates, newest kept. |
 | `isolate` | `scope`, `seed_from`, `query`, `k`, `tags` | Open a private scope, optionally seeded with the top `k` hits from another. |
+| `forget` | `ids` | Delete those memories from any scope. git keeps the old lines. |
+| `scopes` | | Every scope with its memory count and tag counts: what topics memory holds. |
 
 A sub-task or a sub-agent that will generate a lot of throwaway reasoning gets
 `isolate("task-x", seed_from="main", query=...)`, works in that scope, then
@@ -383,7 +385,7 @@ your prompt
 .fornix/
   memories/<scope>.jsonl    the store, committed
   index.db                  sqlite-vec index, gitignored, rebuilt when it drifts
-  context_store/store.py    the four operations
+  context_store/store.py    the operations
   context_store/server.py   MCP over stdio, or HTTP with a JSON API
   setup.sh                  client registration and workspace folders
 skills/context-sync/        the skill, commands and hook the installer copies
