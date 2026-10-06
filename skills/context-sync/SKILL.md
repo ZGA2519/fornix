@@ -13,7 +13,7 @@ Launched by `.mcp.json` at the repo root as `uv run --directory .fornix python -
 
 | tool | args | use |
 | --- | --- | --- |
-| `select` | `query=""`, `scope="main"`, `k=8`, `tags=[]` | Semantic recall, best first, each with a `score`. Empty query returns the `k` newest. |
+| `select` | `query=""`, `scope="main"`, `k=8`, `tags=[]`, `since=""` | Semantic recall, best first, each with a `score`. Empty query returns the `k` newest. `since` (ISO date) keeps only what was written or corrected from then on. |
 | `write` | `text`, `scope="main"`, `tags=[]`, `source=""`, `id=""` | Save one fact. Returns the memory with its `id`. Pass an existing `id` to replace that memory in place. |
 | `compress` | `scope="main"`, `ids=[]`, `summary=""`, `threshold=0.92` | `ids` + `summary`: replace those with one summary. Neither: merge near-duplicates, newest kept. |
 | `isolate` | `scope`, `seed_from=""`, `query=""`, `k=8`, `tags=[]` | Open a private scope, optionally seeded with the top `k` of another. |

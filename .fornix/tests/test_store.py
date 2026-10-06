@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -55,3 +56,14 @@ def test_write_select_compress_isolate(tmp_path: Path):
     assert s.forget([ok["id"]]) == {"removed": [ok["id"]]}
     with pytest.raises(KeyError):
         s.forget([ok["id"]])
+
+    # since keeps what was written or corrected from then on; no offset means local time
+    old = {"id": "old000000000", "ts": "2020-01-01T00:00:00+00:00", "text": "Legacy API ran on PHP 5", "tags": [], "source": ""}
+    f.write_text(f.read_text() + json.dumps(old) + "\n")
+    assert "old000000000" in {r["id"] for r in s.select("", k=20)}
+    assert "old000000000" not in {r["id"] for r in s.select("", k=20, since="2021-01-01")}
+    assert s.select("legacy php api", k=1)[0]["id"] == "old000000000"
+    assert "old000000000" not in {r["id"] for r in s.select("legacy php api", since="2021-01-01T00:00+07:00")}
+    assert s.select("", since="2999-01-01") == []
+    with pytest.raises(ValueError, match="since"):
+        s.select("", since="last week")

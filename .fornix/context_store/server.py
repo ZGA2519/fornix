@@ -61,10 +61,12 @@ def write(text: str, scope: str = "main", tags: list[str] | None = None, source:
 
 @mcp.tool()
 @_surface
-def select(query: str = "", scope: str = "main", k: int = 8, tags: list[str] | None = None) -> list[dict]:
+def select(query: str = "", scope: str = "main", k: int = 8, tags: list[str] | None = None, since: str = "") -> list[dict]:
     """Recall memories. With a query: semantic search, best first, each with a score.
-    Without a query: the k newest. tags keeps only memories carrying any of them. Call this before starting work."""
-    return store.select(query, scope, k, tags or [])
+    Without a query: the k newest. tags keeps only memories carrying any of them. Call this before starting work.
+    since (ISO date or datetime, no offset = local time) keeps memories written or corrected from then on:
+    with no query, that is a catch-up on what changed, e.g. since="2026-10-01" for this week's decisions."""
+    return store.select(query, scope, k, tags or [], since)
 
 
 @mcp.tool()
@@ -121,8 +123,8 @@ def write_api(text: str = Body(), scope: str = Body("main"), tags: list[str] = B
 
 
 @api.post("/select")
-def select_api(query: str = Body(""), scope: str = Body("main"), k: int = Body(8), tags: list[str] = Body([])):
-    return store.select(query, scope, k, tags)
+def select_api(query: str = Body(""), scope: str = Body("main"), k: int = Body(8), tags: list[str] = Body([]), since: str = Body("")):
+    return store.select(query, scope, k, tags, since)
 
 
 @api.post("/compress")
