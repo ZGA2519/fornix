@@ -207,7 +207,7 @@ Any MCP client gets the same six tools. Scopes are named JSONL files; `main` is 
 
 | tool | args | does |
 | --- | --- | --- |
-| `select` | `query`, `scope=main`, `k=8`, `tags` | Semantic search, best first, each with a score. Empty query lists the `k` newest. |
+| `select` | `query`, `scope=main`, `k=8`, `tags`, `since` | Semantic search, best first, each with a score. Empty query lists the `k` newest. `since="2026-10-01"` keeps what changed from then on. |
 | `write` | `text`, `scope=main`, `tags`, `source`, `id` | Save one fact. Pass an existing `id` to replace that memory in place. |
 | `compress` | `scope`, `ids`, `summary`, `threshold=0.92` | `ids` + `summary`: fold those memories into one. Neither: merge near-duplicates, newest kept. |
 | `isolate` | `scope`, `seed_from`, `query`, `k`, `tags` | Open a private scope, optionally seeded with the top `k` hits from another. |

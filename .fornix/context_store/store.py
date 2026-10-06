@@ -103,18 +103,25 @@ class Store:
         return {**rec, "scope": scope}
 
     @_serialized
-    def select(self, query: str = "", scope: str = "main", k: int = 8, tags=()) -> list[dict]:
+    def select(self, query: str = "", scope: str = "main", k: int = 8, tags=(), since: str = "") -> list[dict]:
         scope = self._scope(scope)
         k = max(1, min(int(k), MAX_K))
+        after = self._since(since)
         self._sync()
         tags = set(tags)
-        pool = {r["id"]: r for r in self._records.values() if r["scope"] == scope and (not tags or tags & set(r["tags"]))}
+        pool = {
+            r["id"]: r
+            for r in self._records.values()
+            if r["scope"] == scope
+            and (not tags or tags & set(r["tags"]))
+            and (not after or datetime.fromisoformat(r["ts"]) >= after)
+        }
         if not query.strip():
             return self._newest(pool.values())[:k]
         rows = self.db.execute(
             "select id, distance from vec where embedding match ? and k = ? and scope = ? order by distance",
-            # ponytail: over-fetch then tag-filter in python; add a tags metadata column if a scope gets huge
-            (self._embed_query(query), k * 4 if tags else k, scope),
+            # ponytail: over-fetch then filter tags and since in python; add metadata columns if a scope gets huge
+            (self._embed_query(query), k * 4 if tags or after else k, scope),
         ).fetchall()
         return [{**pool[i], "score": round(1 - d, 4)} for i, d in rows if i in pool][:k]
 
@@ -187,6 +194,16 @@ class Store:
         if not SCOPE_RE.fullmatch(s):
             raise ValueError(f"bad scope {s!r}: lowercase [a-z0-9._-], 64 chars max")
         return s
+
+    @staticmethod
+    def _since(s: str) -> datetime | None:
+        """ISO date or datetime to an aware UTC datetime. No offset means the machine's local time."""
+        if not s:
+            return None
+        try:
+            return datetime.fromisoformat(s).astimezone(UTC)
+        except ValueError:
+            raise ValueError(f"bad since {s!r}: ISO date or datetime, e.g. 2026-10-01 or 2026-10-01T09:00+07:00") from None
 
     def _files(self) -> list[Path]:
         return sorted(self.mem.glob("*.jsonl"))
