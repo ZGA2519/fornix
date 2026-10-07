@@ -1,0 +1,9 @@
+{
+  "name": "fornix-cli",
+  "version": "0.3.2",
+  "description": "Project memory for AI coding sessions. npx front for the Python installer; needs uv.",
+  "repository": { "type": "git", "url": "git+https://github.com/ZGA2519/fornix.git" },
+  "license": "MIT",
+  "bin": { "fornix": "fornix.js" },
+  "files": ["fornix.js"]
+}

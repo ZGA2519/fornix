@@ -6,6 +6,13 @@
 # Auth is PyPI trusted publishing, no token stored anywhere. One-time setup on PyPI:
 # project fornix → Manage → Publishing → GitHub: owner ZGA2519,
 # repository fornix, workflow publish.yml, environment pypi.
+#
+# npm/ (the `npx fornix-cli` front, which runs uvx fornix@<its version>) goes out
+# after, checked against npm on its own so it catches up on a version PyPI already has.
+# Named fornix-cli because npm refuses plain "fornix" as too close to formik and for-in.
+# Auth is npm trusted publishing. One-time: the first `npm publish ./npm` by hand, then
+# npmjs.com → fornix-cli → Settings → Trusted publisher → GitHub Actions: ZGA2519/fornix,
+# workflow publish.yml, environment pypi.
 name: publish
 on:
   push:
@@ -56,3 +63,17 @@ jobs:
       - name: build and publish
         if: ${{ !steps.v.outputs.skip }}
         run: uv build && uv publish
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24   # npm >= 11.5.1 for trusted publishing
+          registry-url: https://registry.npmjs.org
+
+      - name: npm publish
+        run: |
+          v=${{ steps.v.outputs.version }}
+          if npm view "fornix-cli@$v" version >/dev/null 2>&1; then
+            echo "$v is already on npm, nothing to publish"
+          else
+            cp README.md LICENSE.txt npm/ && npm publish ./npm
+          fi
