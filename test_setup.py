@@ -5,6 +5,7 @@ import pathlib
 import subprocess
 import sys
 import tempfile
+import tomllib
 
 HERE = pathlib.Path(__file__).resolve().parent
 
@@ -150,6 +151,12 @@ def test_wizard_by_keys():
         assert (pathlib.Path(tmp) / ".mcp.json").is_file()
 
 
+def test_npm_version_matches():
+    """npm/fornix.js pins uvx to its own version, so a bump has to touch both files."""
+    py = tomllib.loads((HERE / "pyproject.toml").read_text())["project"]["version"]
+    assert json.loads((HERE / "npm/package.json").read_text())["version"] == py, "bump npm/package.json too"
+
+
 if __name__ == "__main__":
     test_install_twice()
     test_no_hook_and_refuses_checkout()
@@ -157,4 +164,5 @@ if __name__ == "__main__":
     test_upgrade_merges_leftover_context()
     test_set_root_finds_repos_below_root()
     test_wizard_by_keys()
+    test_npm_version_matches()
     print("ok")

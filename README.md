@@ -279,6 +279,7 @@ uvx fornix /path/to/repo -y                 # a repo other than the current one
 uvx fornix --no-hook                        # skill only, no hook
 uvx fornix --codex --vscode                 # register those clients as you go
 uvx --from git+https://github.com/ZGA2519/fornix fornix   # track main
+npx fornix-cli -y                           # from npm; hands off to uvx, so uv is still needed
 
 git clone https://github.com/ZGA2519/fornix && cd fornix
 ./install.sh /path/to/repo        # POSIX sh, the original
