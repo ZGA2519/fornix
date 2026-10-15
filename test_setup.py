@@ -19,7 +19,7 @@ def run(*args):
 def test_install_twice():
     with tempfile.TemporaryDirectory() as tmp:
         t = pathlib.Path(tmp)
-        out = run(t, "-y")
+        out = run("setup", t, "-y")
         assert (t / ".fornix/context_store/server.py").is_file()
         assert not (t / ".fornix/index.db").exists() and not (t / ".fornix/.venv").exists()
         assert (t / ".fornix/memories/main.jsonl").is_file()
@@ -30,16 +30,16 @@ def test_install_twice():
         assert "0 unchanged" in out, out
 
         (t / ".fornix/memories/extra.jsonl").write_text("")
-        out = run(t, "-y")
+        out = run("setup", t, "-y")
         assert "kept as is, 2 stores" in out and "already present" in out and "already registered" in out, out
         assert (t / ".fornix/memories/extra.jsonl").is_file()
 
 
 def test_no_hook_and_refuses_checkout():
     with tempfile.TemporaryDirectory() as tmp:
-        out = run(tmp, "-y", "--no-hook")
+        out = run("setup", tmp, "-y", "--no-hook")
         assert "skipped (skill only)" in out and not (pathlib.Path(tmp) / ".claude/hooks").exists()
-    r = subprocess.run([sys.executable, HERE / "setup.py", HERE, "-y"], capture_output=True, text=True)
+    r = subprocess.run([sys.executable, HERE / "setup.py", "setup", HERE, "-y"], capture_output=True, text=True)
     assert r.returncode == 1 and "source checkout" in r.stderr, r.stderr
 
 
@@ -53,7 +53,7 @@ def test_migrates_context_install():
         (t / ".context/.sync-on").write_text("readonly")
         old = {"command": "uv", "args": ["run", "--directory", ".context", "python", "-m", "context_store.server", "mcp"]}
         (t / ".mcp.json").write_text(json.dumps({"mcpServers": {"context-system": old, "other": {"command": "x"}}}))
-        out = run(t, "-y")
+        out = run("setup", t, "-y")
         assert "moved from .context/" in out and 'legacy "context-system" entry removed' in out, out
         assert not (t / ".context").exists()
         assert (t / ".fornix/memories/main.jsonl").read_text() == '{"id": "a"}\n'
@@ -63,7 +63,7 @@ def test_migrates_context_install():
 
 def test_upgrade_merges_leftover_context():
     """A pull brought .fornix/memories/ while the old .context/ stayed: --upgrade folds it in, both installers."""
-    for installer in ([sys.executable, HERE / "setup.py"], ["sh", HERE / "install.sh"]):
+    for installer in ([sys.executable, HERE / "setup.py", "upgrade"], ["sh", HERE / "install.sh", "--upgrade"]):
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp).resolve()
             t = root / "repo"
@@ -77,7 +77,7 @@ def test_upgrade_merges_leftover_context():
             (root / ".claude/context-sync.repos").write_text(f"context-system-repo {t}\n")
             stale = {"command": "uv", "args": ["run", "--directory", str(t / ".context"), "python", "-m", "context_store.server", "mcp"]}
             (root / ".mcp.json").write_text(json.dumps({"mcpServers": {"context-system-repo": stale}}))
-            r = subprocess.run([*installer, t, "--upgrade"], capture_output=True, text=True)
+            r = subprocess.run([*installer, t], capture_output=True, text=True)
             assert r.returncode == 0 and "merged 1 from .context/" in r.stdout, r.stdout + r.stderr
             assert not (t / ".context").exists()
             assert (t / ".fornix/memories/main.jsonl").read_text() == '{"id": "a"}\n{"id": "b"}\n'
@@ -90,12 +90,12 @@ def test_upgrade_merges_leftover_context():
             (t / ".context/context_store").mkdir(parents=True)
             (t / ".context/memories").mkdir()
             (t / ".context/memories/main.jsonl").write_text('{"id": "a", "text": "local edit"}\n')
-            r = subprocess.run([*installer, t, "--upgrade"], capture_output=True, text=True)
+            r = subprocess.run([*installer, t], capture_output=True, text=True)
             assert r.returncode == 0 and "1 memories differ" in r.stdout, r.stdout + r.stderr
             assert (t / ".context/memories/main.jsonl").is_file()
 
         with tempfile.TemporaryDirectory() as tmp:
-            r = subprocess.run([*installer, tmp, "--upgrade"], capture_output=True, text=True)
+            r = subprocess.run([*installer, tmp], capture_output=True, text=True)
             assert r.returncode == 1 and "nothing to upgrade" in r.stderr, r.stderr
 
 
@@ -105,8 +105,8 @@ def test_set_root_finds_repos_below_root():
         near, deep, toodeep = root / "api", root / "a/b/web", root / "1/2/3/4/5/lost"
         for r in (near, deep, toodeep):
             r.mkdir(parents=True)
-            run(r, "-y", "--no-hook")
-        out = run(root, "--set-root", "-y")
+            run("setup", r, "-y", "--no-hook")
+        out = run("set-root", root, "-y")
         servers = json.loads((root / ".mcp.json").read_text())["mcpServers"]
         assert set(servers) == {"fornix-api", "fornix-web"}, servers
         reg = (root / ".claude/context-sync.repos").read_text().splitlines()
@@ -126,7 +126,7 @@ def test_wizard_by_keys():
         pid, fd = pty.fork()
         if pid == 0:
             os.environ["NO_COLOR"] = "1"
-            os.execvp(sys.executable, [sys.executable, str(HERE / "setup.py"), tmp])
+            os.execvp(sys.executable, [sys.executable, str(HERE / "setup.py"), "setup", tmp])
         out = b""
 
         def until(marker, timeout=15):
@@ -151,6 +151,14 @@ def test_wizard_by_keys():
         assert (pathlib.Path(tmp) / ".mcp.json").is_file()
 
 
+def test_old_forms_still_run():
+    """fornix [TARGET] -y and --upgrade predate the commands: they still work, and say what replaced them."""
+    with tempfile.TemporaryDirectory() as tmp:
+        for old, new in (([tmp, "-y", "--no-hook"], f"setup {tmp} -y --no-hook"), ([tmp, "--upgrade"], f"upgrade {tmp}")):
+            r = subprocess.run([sys.executable, HERE / "setup.py", *old], capture_output=True, text=True)
+            assert r.returncode == 0 and "deprecated" in r.stderr and new in r.stderr, r.stdout + r.stderr
+
+
 def test_npm_version_matches():
     """npm/fornix.js pins uvx to its own version, so a bump has to touch both files."""
     py = tomllib.loads((HERE / "pyproject.toml").read_text())["project"]["version"]
@@ -164,5 +172,6 @@ if __name__ == "__main__":
     test_upgrade_merges_leftover_context()
     test_set_root_finds_repos_below_root()
     test_wizard_by_keys()
+    test_old_forms_still_run()
     test_npm_version_matches()
     print("ok")

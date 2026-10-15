@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Install fornix into a repo: store, MCP entry, skill, commands, hook.
 
-The Python twin of install.sh, for machines without a POSIX sh and for running as a
-tool: `uv run fornix` in a checkout, or without one
-`uvx --from git+https://github.com/ZGA2519/fornix fornix`.
+Run as a tool: `uvx fornix setup -y`, `uvx fornix upgrade`, `uvx fornix set-root ..`;
+`uv run fornix setup` in a checkout. The flag forms from before the subcommands
+(`fornix -y`, `--upgrade`, `--set-root`) and install.sh still run, but are deprecated.
 Idempotent, re-run to update an install. An existing .fornix/memories/ is never touched.
 Run with no answers on a terminal and it asks for them; -y takes the defaults.
 """
@@ -25,11 +25,11 @@ CLIENT_FLAGS = ["--claude", "--codex", "--gemini", "--agy", "--vscode"]
 MCP_ENTRY = {"command": "uv", "args": ["run", "--directory", ".fornix", "python", "-m", "context_store.server", "mcp"]}
 HOOK_CMD = '"$CLAUDE_PROJECT_DIR"/.claude/hooks/context-sync.sh'
 
-USAGE = """\
-%(prog)s [TARGET_REPO] [-y] [--no-hook] [--claude] [--codex] [--gemini] [--agy] [--vscode]
-       %(prog)s [TARGET_REPO] --upgrade [--no-hook] [--claude] [--codex] [--gemini] [--agy] [--vscode]
-       %(prog)s [FOLDER] --set-root [-y]"""
-DESCRIPTION = """\
+DESCRIPTION = "Project memory for AI coding sessions, installed into a repo."
+EPILOG = """\
+%(prog)s COMMAND --help for its options. The forms from before the commands,
+%(prog)s [TARGET_REPO] [-y], --upgrade and --set-root, still run but are deprecated."""
+SETUP = """\
 Installs into TARGET_REPO (default: the current directory):
 
   .fornix/                             the store and MCP server
@@ -47,18 +47,54 @@ Installs into TARGET_REPO (default: the current directory):
 
 Anything not given is asked for interactively when there is a terminal. -y (--yes)
 answers every question with its default instead: the current directory, the hook on,
-no extra clients.
+no extra clients."""
+UPGRADE = """\
+Updates an install that is already in TARGET_REPO (default: the current directory),
+without questions; -y is accepted and changes nothing. One from before the rename
+(.context/) becomes .fornix/; if a .fornix/ is there too (a pull brought the renamed
+memories/), .context/memories/ is merged in by id and .context/ removed. Workspace
+folders that registered this repo are re-pointed at .fornix/. The hook stays as the
+install had it unless --no-hook is given."""
+SET_ROOT = """\
+FOLDER (default: the current directory) is a workspace folder opened over several
+repos. Finds every repo with a .fornix/ install up to 5 levels below it, asks which
+should join, and runs each one's .fornix/setup.sh --set-root FOLDER. -y takes them all."""
+COMMANDS = ("setup", "upgrade", "set-root")
+LEGACY = {"--set-root": "set-root", "--upgrade": "upgrade"}  # flag → the command it became
 
---upgrade       update an install that is already there, without questions. One from
-                before the rename (.context/) becomes .fornix/; if a .fornix/ is there
-                too (a pull brought the renamed memories/), .context/memories/ is merged
-                in by id and .context/ removed. Workspace folders that registered this
-                repo are re-pointed at .fornix/. The hook stays as the install had it.
 
---set-root      the other job: FOLDER (default: the current directory) is a workspace
-                folder opened over several repos. Finds every repo with a .fornix/
-                install up to 5 levels below it, asks which should join, and runs each
-                one's .fornix/setup.sh --set-root FOLDER. -y takes them all."""
+def parser():
+    raw_fmt = argparse.RawDescriptionHelpFormatter
+    # FORNIX_PROG: what a front like `npx fornix-cli` is called, for usage lines and warnings
+    ap = argparse.ArgumentParser(prog=os.environ.get("FORNIX_PROG"), description=DESCRIPTION,
+                                 epilog=EPILOG, formatter_class=raw_fmt)
+    sub = ap.add_subparsers(dest="cmd", required=True, title="commands", metavar="COMMAND")
+    for name, desc, short in (("setup", SETUP, "install fornix into a repo, or update it"),
+                              ("upgrade", UPGRADE, "update an install already there, no questions")):
+        p = sub.add_parser(name, help=short, description=desc, formatter_class=raw_fmt, usage=
+                           "%(prog)s [TARGET_REPO] [-y] [--no-hook] [--claude] [--codex] [--gemini] [--agy] [--vscode]")
+        p.add_argument("target", nargs="?", default="", metavar="TARGET_REPO")
+        p.add_argument("-y", "--yes", action="store_true", help="take every default, ask nothing")
+        p.add_argument("--no-hook", dest="hook", action="store_false", default=None, help="skill only, no hook")
+        for f in CLIENT_FLAGS:
+            p.add_argument(f, dest="clients", action="append_const", const=f, default=None, help=argparse.SUPPRESS)
+    p = sub.add_parser("set-root", help="add the repos below a workspace folder to it",
+                       description=SET_ROOT, formatter_class=raw_fmt)
+    p.add_argument("target", nargs="?", default="", metavar="FOLDER")
+    p.add_argument("-y", "--yes", action="store_true", help="take every repo found, ask nothing")
+    return ap
+
+
+def modern(argv, prog):
+    """The flag forms from before the commands, rewritten as a command line, with a warning.
+    `fornix -y` is `fornix setup -y`, `fornix X --upgrade` is `fornix upgrade X`."""
+    if argv and argv[0] in (*COMMANDS, "-h", "--help"):
+        return argv
+    new = [next((c for f, c in LEGACY.items() if f in argv), "setup"), *(x for x in argv if x not in LEGACY)]
+    print(f"{Y}! deprecated: {' '.join([prog, *argv])}{R}\n  {Y}use:{R} {C}{' '.join([prog, *new])}{R}\n",
+          file=sys.stderr)
+    return new
+
 
 if os.name == "nt":
     os.system("")  # ponytail: the documented hack that turns on ANSI escapes in conhost
@@ -375,21 +411,16 @@ def source():
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(usage=USAGE, description=DESCRIPTION,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("target", nargs="?", default="", metavar="TARGET_REPO")
-    ap.add_argument("-y", "--yes", action="store_true")
-    ap.add_argument("--no-hook", dest="hook", action="store_false", default=None)
-    ap.add_argument("--set-root", action="store_true")
-    ap.add_argument("--upgrade", action="store_true")
-    for f in CLIENT_FLAGS:
-        ap.add_argument(f, dest="clients", action="append_const", const=f, default=None)
-    a = ap.parse_args(argv)
-    got_clients = a.clients is not None
-    clients = a.clients or []
+    ap = parser()
+    if Path(sys.argv[0]).stem == "context-system":  # the script name from before the rename
+        print(f"{Y}! deprecated: context-system{R}\n  {Y}use:{R} {C}fornix{R}\n", file=sys.stderr)
+    a = ap.parse_args(modern(sys.argv[1:] if argv is None else list(argv), ap.prog))
+    a.upgrade = a.cmd == "upgrade"
+    got_clients = getattr(a, "clients", None) is not None
+    clients = getattr(a, "clients", None) or []
     target = Path(a.target).expanduser() if a.target else None
 
-    if a.set_root:
+    if a.cmd == "set-root":
         return set_root(target or Path.cwd(), a.yes)
     a.yes = a.yes or a.upgrade
 
@@ -589,7 +620,7 @@ def main(argv=None):
         sec("other clients")
     print(f"  .fornix/setup.sh                                   {D}asks: clients, workspace folder{R}")
     print(f"  .fornix/setup.sh --codex --set-root <folder>       {D}--print just lists the commands{R}")
-    print(f"  {ap.prog} <folder> --set-root {' ' * max(0, 30 - len(ap.prog))}{D}finds the repos below a folder, asks which join{R}")
+    print(f"  {ap.prog} set-root <folder> {' ' * max(0, 30 - len(ap.prog))}{D}finds the repos below a folder, asks which join{R}")
 
 
 if __name__ == "__main__":

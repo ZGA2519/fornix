@@ -1,6 +1,6 @@
 [project]
 name = "fornix"
-version = "0.3.2"
+version = "0.4.0"
 description = "Project memory for AI coding sessions. Lives in the repo, travels with the code, shared by every model that opens it, consulted on every prompt."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -11,7 +11,7 @@ Repository = "https://github.com/ZGA2519/fornix"
 
 [project.scripts]
 fornix = "setup:main"
-context-system = "setup:main"  # the name before the rename, so old uvx lines still run
+context-system = "setup:main"  # deprecated: the name before the rename, warns and runs as fornix
 
 # flit_core: the one backend that ships a single-file module without ever executing
 # setup.py (setuptools would run it at build time and start the wizard).
