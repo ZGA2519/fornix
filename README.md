@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ZGA2519/fornix/main/docs/banner.jpg" alt="fornix — Memory that moves with the code. $ uvx fornix -y" width="100%" />
+  <img src="https://raw.githubusercontent.com/ZGA2519/fornix/main/docs/banner.jpg" alt="fornix — Memory that moves with the code. $ uvx fornix setup -y" width="100%" />
 </p>
 
 <h1 align="center">Fornix</h1>
@@ -114,14 +114,14 @@ Any MCP client gets the same six tools. There is also an HTTP service with a JSO
 
 ```sh
 cd your-repo
-uvx fornix -y
+uvx fornix setup -y
 ```
 
 No uv for the installer? Either of these does the same:
 
 ```sh
-pipx run fornix -y                  # pipx
-pip install fornix && fornix -y     # plain pip, ideally in a venv
+pipx run fornix setup -y                  # pipx
+pip install fornix && fornix setup -y     # plain pip, ideally in a venv
 ```
 
 The server still runs through uv, so it has to be on `PATH` either way.
@@ -153,7 +153,7 @@ Re-run the command any time to update an install; `memories/` is never touched.
 ### Upgrading from context-system
 
 ```sh
-uvx fornix --upgrade
+uvx fornix upgrade
 ```
 
 Moves `.context/` to `.fornix/` and swaps the `context-system` server entry for
@@ -161,7 +161,7 @@ Moves `.context/` to `.fornix/` and swaps the `context-system` server entry for
 already came in with a pull, so both folders exist, the memories left in
 `.context/memories/` are merged in by id and `.context/` is removed; an id whose text
 differs on the two sides stops the removal so you can compare. Workspace folders that
-registered the repo with `--set-root` are re-pointed too. Other clients registered by
+registered the repo with `set-root` are re-pointed too. Other clients registered by
 hand (`codex`, `gemini`, …) still carry the old `context-system` entry: remove it with
 their own `mcp remove`.
 
@@ -226,10 +226,11 @@ One store per repo, but the editor is usually open on the folder above several.
 From that folder:
 
 ```sh
-uvx fornix --set-root        # finds every repo with a .fornix/ up to 5 levels down, asks which join
+uvx fornix set-root          # finds every repo with a .fornix/ up to 5 levels down, asks which join
 ```
 
-or inside each repo, `.fornix/setup.sh --set-root ..`. Either way the repo adds
+or from inside a repo, `uvx fornix set-root ..` (or `.fornix/setup.sh --set-root ..`
+without uv). Either way the repo adds
 itself to that folder's `.mcp.json` as `fornix-<repo>` with an
 absolute path, and copies the skill, commands and hook into the folder's `.claude/`.
 Stores stay separate on purpose: one repo's decisions are not another's. Sync is
@@ -271,21 +272,34 @@ curl -s localhost:8765/select -d '{"query":"how is auth done"}' -H 'content-type
 
 ### Other ways to install
 
-All of these are the same installer with the same flags. `uvx` fetches the release
-tag from GitHub, so it needs `git`; the rest run from a checkout.
+All of these are the same installer: `fornix COMMAND [options] [args]`, with
+`setup`, `upgrade` and `set-root` as the commands. `uvx` fetches the release tag
+from GitHub, so it needs `git`; the rest run from a checkout.
 
 ```sh
-uvx fornix /path/to/repo -y                 # a repo other than the current one
-uvx fornix --no-hook                        # skill only, no hook
-uvx fornix --codex --vscode                 # register those clients as you go
-uvx --from git+https://github.com/ZGA2519/fornix fornix   # track main
-npx fornix-cli -y                           # from npm; hands off to uvx, so uv is still needed
+uvx fornix setup /path/to/repo -y           # a repo other than the current one
+uvx fornix setup --no-hook                  # skill only, no hook
+uvx fornix setup --codex --vscode           # register those clients as you go
+uvx fornix upgrade -y                       # update the install here, no questions
+uvx fornix set-root ..                      # join the workspace folder above
+uvx --from git+https://github.com/ZGA2519/fornix fornix setup   # track main
+npx fornix-cli setup -y                     # from npm; hands off to uvx, so uv is still needed
 
 git clone https://github.com/ZGA2519/fornix && cd fornix
-./install.sh /path/to/repo        # POSIX sh, the original
-python3 setup.py /path/to/repo    # the same wizard in Python, runs in cmd.exe too
-uv run fornix --help      # everything the installer accepts
+python3 setup.py setup /path/to/repo    # the same wizard without uvx, runs in cmd.exe too
+uv run fornix --help                    # every command; fornix COMMAND --help for its options
 ```
+
+**Deprecated**, still run but print what replaced them:
+
+| old | now |
+| --- | --- |
+| `uvx fornix -y`, `uvx fornix /path/to/repo` | `uvx fornix setup -y`, `uvx fornix setup /path/to/repo` |
+| `uvx fornix --upgrade` | `uvx fornix upgrade` |
+| `uvx fornix --set-root` | `uvx fornix set-root` |
+| `npx fornix-cli -y` | `npx fornix-cli setup -y` |
+| `./install.sh /path/to/repo [--upgrade]` | `uvx fornix setup` / `upgrade`; frozen at the old flags |
+| `context-system` (the script name before the rename) | `fornix` |
 
 ---
 
@@ -390,7 +404,7 @@ your prompt
   context_store/server.py   MCP over stdio, or HTTP with a JSON API
   setup.sh                  client registration and workspace folders
 skills/context-sync/        the skill, commands and hook the installer copies
-install.sh · setup.py       the installer, twice
+setup.py                    the installer (install.sh: its deprecated sh twin)
 ```
 
 Tests: `uv run --group dev pytest` inside `.fornix/` for the store,

@@ -1,5 +1,6 @@
 #!/usr/bin/env sh
 # Install fornix into a repo: store, MCP entry, skill, commands, hook.
+# Deprecated: `uvx fornix setup` / `uvx fornix upgrade` (setup.py) replace it.
 # Idempotent — re-run to update an install. An existing .fornix/memories/ is never touched.
 # Run with no answers on a terminal and it asks for them, vite-style; -y takes the defaults.
 set -eu
@@ -16,6 +17,8 @@ usage() {
   cat <<'USAGE'
 usage: ./install.sh [TARGET_REPO] [-y] [--no-hook] [--claude] [--codex] [--gemini] [--agy] [--vscode]
        ./install.sh [TARGET_REPO] --upgrade [--no-hook] [--claude] [--codex] [--gemini] [--agy] [--vscode]
+
+Deprecated: use `uvx fornix setup` / `uvx fornix upgrade` instead, same options.
 
 Installs into TARGET_REPO (default: the current directory):
 
@@ -59,6 +62,10 @@ for arg in "$@"; do
 done
 
 [ -d "$SRC/.fornix" ] || { echo "install: run this from a fornix checkout ($SRC has no .fornix/)" >&2; exit 1; }
+
+# ponytail: frozen at the flag forms; new commands land in setup.py only
+if [ "$UPGRADE" = 1 ]; then NEW=upgrade; else NEW=setup; fi
+echo "install: install.sh is deprecated; use: uvx fornix $NEW${TARGET:+ $TARGET}" >&2
 
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
   B=$(printf '\033[1m') D=$(printf '\033[2m') R=$(printf '\033[0m')
