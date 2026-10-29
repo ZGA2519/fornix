@@ -2,16 +2,22 @@
 # Re-inject the context-sync loop on every prompt while a flag file exists.
 # Registered as a UserPromptSubmit hook; stdout is added to the model's context.
 # The flag file's contents are the mode: "readonly" for recall-only, anything
-# else (including empty) for full recall + capture.
+# else (including empty) for full recall + capture. "detail" is full plus a log:
+# every prompt, and every tool call (registered again as PostToolUse with "post"),
+# is appended verbatim to .fornix/memories/detail.jsonl.
 #
 # Two layouts, both driven by <repo>/.fornix/.sync-on:
 #   a repo opened on its own   the flag beside this project, server "fornix"
 #   a workspace folder over    .claude/context-sync.repos lists "<server> <repo path>"
 #   several repos              for every repo added with .fornix/setup.sh --set-root;
 #                              each repo's own flag arms its own server
-cat > /dev/null  # drain the stdin JSON; leaving it unread can trip the hook handler
-
 PD="${CLAUDE_PROJECT_DIR:-.}"
+# ponytail: detail logs a repo opened on its own; a workspace folder over several repos is not logged
+[ "$(tr -d '[:space:]' 2>/dev/null < "$PD/.fornix/.sync-on")" != "detail" ] ||
+  uv run --quiet --directory "$PD/.fornix" python -m context_store.store > /dev/null
+cat > /dev/null  # drain the stdin JSON; leaving it unread can trip the hook handler
+[ "$1" != "post" ] || exit 0  # PostToolUse: the log above was the whole job
+
 FULL="" RO=""
 
 # arm <server> <flag file>: sort that server into the capture or the read-only list

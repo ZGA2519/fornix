@@ -3,3 +3,4 @@ __pycache__/
 .pytest_cache/
 index.db*
 .sync-on
+memories/detail.jsonl

@@ -35,9 +35,9 @@ Installs into TARGET_REPO (default: the current directory):
   .fornix/                             the store and MCP server
   .mcp.json                             mcpServers.fornix, merged in
   .claude/skills/context-sync/          the skill
-  .claude/commands/context-*.md         /context-start-sync, -readonly, /context-stop-sync
+  .claude/commands/context-*.md         /context-start-sync, -readonly, -detail, /context-stop-sync
   .claude/hooks/context-sync.sh         per-prompt loop re-injection
-  .claude/settings.json                 the UserPromptSubmit hook, merged in
+  .claude/settings.json                 the UserPromptSubmit and PostToolUse hooks, merged in
   .agent/skills/context-sync/           the same skill, vendor-neutral tree
   .agent/prompts/context-*.md           the same commands, called prompts there
 
@@ -572,14 +572,16 @@ def main(argv=None):
 
         p = target / ".claude/settings.json"
         doc = load_json(p)
-        groups = doc.setdefault("hooks", {}).setdefault("UserPromptSubmit", [])
-        if any("context-sync.sh" in x.get("command", "") for g in groups for x in g.get("hooks", [])):
-            result = "already registered"
-        else:
-            groups.append({"hooks": [{"type": "command", "command": HOOK_CMD, "timeout": 5}]})
-            save_json(p, doc)
-            result = "registered"
-        say(".claude/settings.json", f"UserPromptSubmit hook {result}")
+        # PostToolUse only does work in detail mode, logging each tool call
+        for event, cmd in (("UserPromptSubmit", HOOK_CMD), ("PostToolUse", HOOK_CMD + " post")):
+            groups = doc.setdefault("hooks", {}).setdefault(event, [])
+            if any("context-sync.sh" in x.get("command", "") for g in groups for x in g.get("hooks", [])):
+                result = "already registered"
+            else:
+                groups.append({"hooks": [{"type": "command", "command": cmd, "timeout": 5}]})
+                save_json(p, doc)
+                result = "registered"
+            say(".claude/settings.json", f"{event} hook {result}")
 
     # --- workspace folders -------------------------------------------------
     # A folder above this repo that registered it still points at .context/; its own
@@ -604,6 +606,7 @@ def main(argv=None):
     print(f'  {M}1{R}  restart Claude Code and approve the "fornix" server (or /mcp)')
     print(f"  {M}2{R}  {C}/context-start-sync{R}            recall + capture every prompt")
     print(f"     {C}/context-start-sync-readonly{R}   recall only, never writes")
+    print(f"     {C}/context-start-sync-detail{R}     recall + capture, and log every tool call")
     print(f"     {C}/context-stop-sync{R}             off")
     print(f"  {M}3{R}  commit .fornix/memories/ with your code; the rest of .fornix/ is gitignored")
 

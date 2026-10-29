@@ -1,6 +1,6 @@
 ---
 name: context-sync
-description: Drives the `fornix` MCP server (project memory - write/select/compress/isolate over a .fornix/ folder) on a fixed per-turn loop so recall and capture happen every prompt instead of whenever the model happens to think of it. Provides three commands, context-start-sync, context-start-sync-readonly and context-stop-sync. Use this skill whenever the user types any of those names, with or without a leading slash, and also whenever they ask to start or stop syncing context, turn project memory on or off, sync context without writing to it, recall only, read-only context, "keep context in sync", "remember this for the project", "check the context store first", or when a repo contains a .fornix/ folder and the user wants past decisions honored. Also use it when a session has clearly stopped consulting project memory and needs to be put back on the loop.
+description: Drives the `fornix` MCP server (project memory - write/select/compress/isolate over a .fornix/ folder) on a fixed per-turn loop so recall and capture happen every prompt instead of whenever the model happens to think of it. Provides four commands, context-start-sync, context-start-sync-readonly, context-start-sync-detail and context-stop-sync. Use this skill whenever the user types any of those names, with or without a leading slash, and also whenever they ask to start or stop syncing context, turn project memory on or off, sync context without writing to it, recall only, read-only context, detail mode, log every action or tool call, "keep context in sync", "remember this for the project", "check the context store first", or when a repo contains a .fornix/ folder and the user wants past decisions honored. Also use it when a session has clearly stopped consulting project memory and needs to be put back on the loop.
 ---
 
 # context-sync
@@ -43,6 +43,16 @@ While read-only:
 - Something durable turns up and there's nowhere to put it: mention it in one line at the end of the turn and move on. Don't stockpile a list to flush later, and don't ask every turn for permission to write.
 - Switching to full capture takes an explicit `context-start-sync` from the user. Nothing said mid-session — "yeah that's worth remembering", "go ahead" — promotes read-only to writable on its own.
 - Footer marks the mode: `context: 6 recalled · read-only`.
+
+## Command: context-start-sync-detail
+
+Full mode plus a verbatim action log: every prompt and every tool call (name, input, output) is appended to the `detail` scope, not just the durable facts written at the end of a turn.
+
+1. Steps 1 and 2 of `context-start-sync`, unchanged.
+2. `echo detail > .fornix/.sync-on` instead of `full`.
+3. Report that sync is on in detail mode, then run the normal full loop.
+
+The log is written by the hook, not by you: it fires on `UserPromptSubmit` and `PostToolUse` while the flag says `detail`. Don't `write` actions into `main` by hand; `main` stays for durable facts. To look back at what was done, `select(query=..., scope="detail")`, or `select(scope="detail", since=...)` for a time window. Each logged action is cut at 4000 chars, and a prompt, tool input or tool output that looks like it holds a secret is masked whole. `memories/detail.jsonl` is gitignored by the install: it stays on this machine unless someone removes that line. Needs the hook; with `--no-hook` there is no log. `context-stop-sync` ends it like any other mode.
 
 ## The per-turn loop (while sync is on)
 
@@ -104,7 +114,7 @@ A tool error or an unreachable server: say it once, treat sync as off, carry on 
 
 These instructions live in context, so on a long or heavily compacted session the loop can quietly fade. The hard guarantee is the `UserPromptSubmit` hook at `.claude/hooks/context-sync.sh`, which re-injects the loop on every prompt as long as `.fornix/.sync-on` exists. `install.sh` puts it there and registers it in `.claude/settings.json`; if this repo was set up by hand or with `--no-hook`, re-run `./install.sh <this repo>` from the fornix checkout to add it. Claude Code CLI only — Cowork does not fire hooks, so there the skill-only path is all there is.
 
-The three command names are real slash commands when `install.sh` has run (they live in `.claude/commands/`, which is the only place Claude Code looks — command files sitting inside a skill folder are never registered). Without them, typing the command name as plain text works just as well.
+The four command names are real slash commands when `install.sh` has run (they live in `.claude/commands/`, which is the only place Claude Code looks — command files sitting inside a skill folder are never registered). Without them, typing the command name as plain text works just as well.
 
 ## Many repos in one window
 

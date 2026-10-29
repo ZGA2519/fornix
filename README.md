@@ -191,12 +191,13 @@ stated preference. Not durable, so it does not: transient state, file contents,
 anything re-derivable by reading the repo, general knowledge. Never: credentials,
 tokens, personal data. The store is committed and pushed.
 
-### Three commands
+### Four commands
 
 | command | does |
 | --- | --- |
 | `/context-start-sync` | recall and capture on every prompt |
 | `/context-start-sync-readonly` | recall only, writes nothing, ever. For someone else's repo, or a branch whose decisions are not settled |
+| `/context-start-sync-detail` | full sync, plus every prompt and tool call (name, input, output) logged verbatim to the `detail` scope by the hook. Secrets masked, 4000 chars per action, gitignored so it stays local |
 | `/context-stop-sync` | final flush of anything durable, then off |
 
 ---

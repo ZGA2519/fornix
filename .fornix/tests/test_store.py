@@ -67,3 +67,20 @@ def test_write_select_compress_isolate(tmp_path: Path):
     assert s.select("", since="2999-01-01") == []
     with pytest.raises(ValueError, match="since"):
         s.select("", since="last week")
+
+
+def test_trail_logs_prompts_and_tool_calls(tmp_path: Path):
+    from context_store.store import trail
+
+    trail({"session_id": "s1", "prompt": "add a retry to the fetcher"}, tmp_path)
+    trail({"session_id": "s1", "tool_name": "Bash", "tool_input": {"command": "pytest -q"}, "tool_response": {"stdout": "3 passed"}}, tmp_path)
+    trail({"tool_name": "Read", "tool_input": {"file_path": ".env"}, "tool_response": "DB_PASSWORD=hunter22"}, tmp_path)
+    trail({"tool_name": "Read", "tool_input": {}, "tool_response": "x" * 9000}, tmp_path)
+
+    s = Store(tmp_path)
+    logged = s.select("", "detail", k=10)[::-1]
+    assert [r["tags"] for r in logged[:2]] == [["detail", "prompt"], ["detail", "tool", "bash"]]
+    assert "pytest -q" in logged[1]["text"] and "3 passed" in logged[1]["text"] and logged[1]["source"] == "s1"
+    assert "hunter22" not in logged[2]["text"] and ".env" in logged[2]["text"]  # the secret part masked, the action kept
+    assert len(logged[3]["text"]) == 4000
+    assert s.select("", k=10) == []  # main stays clean for the recall loop

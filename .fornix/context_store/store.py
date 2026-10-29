@@ -291,3 +291,41 @@ class Store:
                 f.write_text("".join(l + "\n" for l in keep), encoding="utf-8")
         self._sync()
         return gone
+
+
+# ---- detail mode ------------------------------------------------------------
+
+TRAIL_MAX = 4000  # ponytail: one logged action is cut at this many chars; raise it if big reads lose what matters
+
+
+def trail(event: dict, root: Path = ROOT) -> dict:
+    """Detail mode: append one hook event, a prompt or a tool call, verbatim to the "detail" scope.
+    A part that looks like it holds a secret is masked whole rather than refused, so the action is still logged."""
+
+    def part(v) -> str:
+        s = v if isinstance(v, str) else json.dumps(v, ensure_ascii=False)
+        return "[redacted: looked like a secret]" if SECRET_RE.search(s) else s
+
+    if "tool_name" in event:
+        text = f"{event['tool_name']} {part(event.get('tool_input'))}\n→ {part(event.get('tool_response'))}"
+        tags = ["detail", "tool", event["tool_name"].lower()]
+    else:
+        text, tags = f"prompt: {part(event.get('prompt', ''))}", ["detail", "prompt"]
+    rec = {"id": uuid.uuid4().hex[:12], "ts": _now(), "text": text[:TRAIL_MAX], "tags": tags, "source": event.get("session_id", "")}
+    (root / "memories").mkdir(parents=True, exist_ok=True)
+    # the same cross-process mutex Store._lock takes, so parallel tool calls never interleave their lines
+    db = sqlite3.connect(root / "index.db", timeout=30, isolation_level=None)
+    try:
+        db.execute("begin immediate")
+        with (root / "memories/detail.jsonl").open("a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        db.commit()
+    finally:
+        db.close()
+    return rec
+
+
+if __name__ == "__main__":  # the hook pipes its event JSON here in detail mode
+    import sys
+
+    trail(json.load(sys.stdin))
