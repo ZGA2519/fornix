@@ -124,4 +124,4 @@ The stores stay separate on purpose: one repo's decisions are not another's. Rec
 
 ## Tuning
 
-`k=6` on recall and one select per prompt is the default because recall cost is paid on every turn. Raise `k` for a research-heavy session, drop to select-only-on-topic-change if the store is small and the session is long. If the user asks for cheaper syncing, cut recall frequency first, never capture.
+`k=6` on recall and one select per prompt is the default because recall cost is paid on every turn. Raise `k` for a research-heavy session (set `CONTEXT_SYNC_K` in the environment Claude Code runs in; `CONTEXT_K` on the server changes the default for calls that pass no `k`), drop to select-only-on-topic-change if the store is small and the session is long. If the user asks for cheaper syncing, cut recall frequency first, never capture.

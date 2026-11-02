@@ -357,7 +357,8 @@ same file.
 **The index is disposable.** `index.db` is a sqlite-vec index rebuilt from the JSONL
 whenever they drift. Delete it freely. Embeddings come from
 `BAAI/bge-small-en-v1.5` via fastembed, about 30 MB, downloaded on first run;
-`CONTEXT_EMBED_MODEL` picks another.
+`CONTEXT_EMBED_MODEL` picks another. `CONTEXT_K` sets the default `k` for
+`select` and `isolate` (8), `CONTEXT_SYNC_K` the `k` the hook recalls per prompt (6).
 
 **The skill solves *when*, the hook makes it stick.** A memory server on its own
 gets called whenever the model happens to think of it, which on a long session

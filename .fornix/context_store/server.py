@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
-from .store import Store
+from .store import DEFAULT_K, Store
 
 store = Store()
 
@@ -61,7 +61,7 @@ def write(text: str, scope: str = "main", tags: list[str] | None = None, source:
 
 @mcp.tool()
 @_surface
-def select(query: str = "", scope: str = "main", k: int = 8, tags: list[str] | None = None, since: str = "") -> list[dict]:
+def select(query: str = "", scope: str = "main", k: int = DEFAULT_K, tags: list[str] | None = None, since: str = "") -> list[dict]:
     """Recall memories. With a query: semantic search, best first, each with a score.
     Without a query: the k newest. tags keeps only memories carrying any of them. Call this before starting work.
     since (ISO date or datetime, no offset = local time) keeps memories written or corrected from then on:
@@ -79,7 +79,7 @@ def compress(scope: str = "main", ids: list[str] | None = None, summary: str = "
 
 @mcp.tool()
 @_surface
-def isolate(scope: str, seed_from: str = "", query: str = "", k: int = 8, tags: list[str] | None = None) -> dict:
+def isolate(scope: str, seed_from: str = "", query: str = "", k: int = DEFAULT_K, tags: list[str] | None = None) -> dict:
     """Open a private scope for a sub-task or agent. seed_from + query copies the k most relevant memories
     of another scope into it. Then write/select with scope=<name>, and compress its ids into main when done."""
     return store.isolate(scope, seed_from, query, k, tags or [])
@@ -123,7 +123,7 @@ def write_api(text: str = Body(), scope: str = Body("main"), tags: list[str] = B
 
 
 @api.post("/select")
-def select_api(query: str = Body(""), scope: str = Body("main"), k: int = Body(8), tags: list[str] = Body([]), since: str = Body("")):
+def select_api(query: str = Body(""), scope: str = Body("main"), k: int = Body(DEFAULT_K), tags: list[str] = Body([]), since: str = Body("")):
     return store.select(query, scope, k, tags, since)
 
 
@@ -133,7 +133,7 @@ def compress_api(scope: str = Body("main"), ids: list[str] = Body([]), summary: 
 
 
 @api.post("/isolate")
-def isolate_api(scope: str = Body(), seed_from: str = Body(""), query: str = Body(""), k: int = Body(8), tags: list[str] = Body([])):
+def isolate_api(scope: str = Body(), seed_from: str = Body(""), query: str = Body(""), k: int = Body(DEFAULT_K), tags: list[str] = Body([])):
     return store.isolate(scope, seed_from, query, k, tags)
 
 

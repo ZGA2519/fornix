@@ -19,6 +19,10 @@ cat > /dev/null  # drain the stdin JSON; leaving it unread can trip the hook han
 [ "$1" != "post" ] || exit 0  # PostToolUse: the log above was the whole job
 
 FULL="" RO=""
+# CONTEXT_SYNC_K: how many memories each per-prompt recall asks for; anything but 1..100 falls back to 6
+K="${CONTEXT_SYNC_K:-6}"
+case "$K" in ''|*[!0-9]*) K=6 ;; esac
+[ "$K" -ge 1 ] && [ "$K" -le 100 ] || K=6
 
 # arm <server> <flag file>: sort that server into the capture or the read-only list
 arm() {
@@ -43,9 +47,9 @@ fi
 ALL=$(join "$FULL $RO")
 WHERE=""
 if [ "$(count "$FULL $RO")" = 1 ]; then
-  RECALL="Before answering this prompt: call the $ALL MCP select() with a query built from the intent of the prompt, k=6, and treat the results as project ground truth."
+  RECALL="Before answering this prompt: call the $ALL MCP select() with a query built from the intent of the prompt, k=$K, and treat the results as project ground truth."
 else
-  RECALL="Before answering this prompt: call select() on the MCP server for the repo this prompt is about, with a query built from the intent of the prompt, k=6, and treat the results as project ground truth. One server per repo, all syncing right now: $ALL. Each holds only that repo's memory, so recall from the one that owns the files in play."
+  RECALL="Before answering this prompt: call select() on the MCP server for the repo this prompt is about, with a query built from the intent of the prompt, k=$K, and treat the results as project ground truth. One server per repo, all syncing right now: $ALL. Each holds only that repo's memory, so recall from the one that owns the files in play."
   WHERE=" on the server for the repo it belongs to,"
 fi
 

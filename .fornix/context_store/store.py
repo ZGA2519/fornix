@@ -26,6 +26,20 @@ ROOT = Path(os.environ.get("CONTEXT_DIR", Path(__file__).resolve().parent.parent
 MODEL = os.environ.get("CONTEXT_EMBED_MODEL", "BAAI/bge-small-en-v1.5")
 SCOPE_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}")  # a scope becomes a filename, keep it boring
 MAX_K = 100
+
+
+def _default_k() -> int:
+    raw = os.environ.get("CONTEXT_K", "8")
+    try:
+        k = int(raw)
+    except ValueError:
+        raise SystemExit(f"CONTEXT_K={raw!r} is not a whole number") from None
+    if not 1 <= k <= MAX_K:
+        raise SystemExit(f"CONTEXT_K={k} is out of range, use 1..{MAX_K}")
+    return k
+
+
+DEFAULT_K = _default_k()  # how many memories select and isolate return when the caller gives no k
 # memories are committed to git, so refuse anything shaped like a credential before it reaches the file
 # ponytail: known token shapes, not an entropy scan; swap in detect-secrets if one slips past
 SECRET_RE = re.compile(
@@ -103,7 +117,7 @@ class Store:
         return {**rec, "scope": scope}
 
     @_serialized
-    def select(self, query: str = "", scope: str = "main", k: int = 8, tags=(), since: str = "") -> list[dict]:
+    def select(self, query: str = "", scope: str = "main", k: int = DEFAULT_K, tags=(), since: str = "") -> list[dict]:
         scope = self._scope(scope)
         k = max(1, min(int(k), MAX_K))
         after = self._since(since)
@@ -159,7 +173,7 @@ class Store:
         return {"merged": merged, "removed": sorted(dropped)}
 
     @_serialized
-    def isolate(self, scope: str, seed_from: str = "", query: str = "", k: int = 8, tags=()) -> dict:
+    def isolate(self, scope: str, seed_from: str = "", query: str = "", k: int = DEFAULT_K, tags=()) -> dict:
         """Create or open a private scope. seed_from copies the k most relevant memories of another scope into it."""
         scope = self._scope(scope)
         (self.mem / f"{scope}.jsonl").touch()

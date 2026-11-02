@@ -84,3 +84,16 @@ def test_trail_logs_prompts_and_tool_calls(tmp_path: Path):
     assert "hunter22" not in logged[2]["text"] and ".env" in logged[2]["text"]  # the secret part masked, the action kept
     assert len(logged[3]["text"]) == 4000
     assert s.select("", k=10) == []  # main stays clean for the recall loop
+
+
+def test_default_k_from_env(monkeypatch):
+    import context_store.store as st
+
+    monkeypatch.setenv("CONTEXT_K", "3")
+    assert st._default_k() == 3
+    for bad in ("0", "101", "lots"):
+        monkeypatch.setenv("CONTEXT_K", bad)
+        with pytest.raises(SystemExit):
+            st._default_k()
+    monkeypatch.delenv("CONTEXT_K")
+    assert st._default_k() == 8

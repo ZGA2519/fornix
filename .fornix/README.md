@@ -72,4 +72,5 @@ Scope names are `[a-z0-9._-]`, one JSONL file each. `main` is the shared default
 - Deleting `index.db` or `.venv/` under a running server strands its open handles. Restart it (Claude Code: `/mcp`, reconnect). Tool errors land in the client's MCP log via stderr.
 - Merge conflicts in a JSONL: keep both sides, ids are unique, then run `compress()`.
 - `CONTEXT_EMBED_MODEL` picks any fastembed model. Changing it rebuilds the index.
+- `CONTEXT_K` (1–100, default 8) sets how many memories `select` and `isolate` return when the caller passes no `k`. `CONTEXT_SYNC_K` (1–100, default 6) sets the `k` the context-sync hook asks for on every prompt.
 - The server holds no LLM. Summaries come from the model calling `compress`, so any model can be the summariser.
