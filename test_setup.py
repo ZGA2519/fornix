@@ -35,6 +35,32 @@ def test_install_twice():
         assert (t / ".fornix/memories/extra.jsonl").is_file()
 
 
+
+def test_k_flags_write_config():
+    """--k / --sync-k land in .fornix/config.json; a re-run without them, or an upgrade, leaves it alone."""
+    with tempfile.TemporaryDirectory() as tmp:
+        t = pathlib.Path(tmp)
+        out = run("setup", t, "-y")
+        assert not (t / ".fornix/config.json").exists() and "✔ .fornix/config.json" not in out, out
+        assert (t / ".claude/commands/context-set-k.md").is_file() and (t / ".agent/prompts/context-set-k.md").is_file()
+
+        out = run("setup", t, "-y", "--k", "12", "--sync-k", "10")
+        assert "created: k=12, sync_k=10" in out, out
+        cfg = t / ".fornix/config.json"
+        cfg.write_text(json.dumps({**json.loads(cfg.read_text()), "future": 1}))
+
+        run("upgrade", t)
+        assert json.loads(cfg.read_text()) == {"k": 12, "sync_k": 10, "future": 1}
+        out = run("upgrade", t, "--sync-k", "4")
+        assert "replaced: sync_k=4" in out and json.loads(cfg.read_text()) == {"k": 12, "sync_k": 4, "future": 1}, out
+        assert "already sync_k=4" in run("setup", t, "-y", "--sync-k", "4")
+
+        for bad in ("0", "101", "ten"):
+            r = subprocess.run([sys.executable, HERE / "setup.py", "setup", t, "-y", "--k", bad], capture_output=True, text=True)
+            assert r.returncode == 2 and "--k" in r.stderr, r.stderr
+        assert json.loads(cfg.read_text())["k"] == 12
+
+
 def test_no_hook_and_refuses_checkout():
     with tempfile.TemporaryDirectory() as tmp:
         out = run("setup", tmp, "-y", "--no-hook")
@@ -167,6 +193,7 @@ def test_npm_version_matches():
 
 if __name__ == "__main__":
     test_install_twice()
+    test_k_flags_write_config()
     test_no_hook_and_refuses_checkout()
     test_migrates_context_install()
     test_upgrade_merges_leftover_context()
