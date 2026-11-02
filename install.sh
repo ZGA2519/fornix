@@ -367,6 +367,7 @@ fi
     --exclude '.fornix/.pytest_cache' \
     --exclude '.fornix/.sync-on' \
     --exclude '.fornix/memories' \
+    --exclude '.fornix/config.json' \
     --exclude '*/__pycache__' \
     --exclude '*.DS_Store' \
     .fornix) | (cd "$TARGET" && tar xf -)

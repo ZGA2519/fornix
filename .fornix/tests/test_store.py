@@ -86,14 +86,70 @@ def test_trail_logs_prompts_and_tool_calls(tmp_path: Path):
     assert s.select("", k=10) == []  # main stays clean for the recall loop
 
 
-def test_default_k_from_env(monkeypatch):
-    import context_store.store as st
+
+def test_config_env_beats_file_beats_default(tmp_path: Path, monkeypatch):
+    from context_store import config
+
+    monkeypatch.delenv("CONTEXT_K", raising=False)
+    monkeypatch.delenv("CONTEXT_SYNC_K", raising=False)
+    assert config.resolve("k", tmp_path) == (8, "default") and config.get("sync_k", tmp_path) == 6
+
+    (tmp_path / "config.json").write_text('{"future": true}')
+    assert config.save(tmp_path, k=12, sync_k=None) == {"future": True, "k": 12}  # unknown keys survive a save
+    assert config.resolve("k", tmp_path) == (12, "config.json") and config.get("sync_k", tmp_path) == 6
 
     monkeypatch.setenv("CONTEXT_K", "3")
-    assert st._default_k() == 3
-    for bad in ("0", "101", "lots"):
-        monkeypatch.setenv("CONTEXT_K", bad)
-        with pytest.raises(SystemExit):
-            st._default_k()
+    assert config.resolve("k", tmp_path) == (3, "CONTEXT_K")
+
+    for bad in (0, 101, "lots", 2.5, True):
+        with pytest.raises(ValueError):
+            config.save(tmp_path, k=bad)
+    with pytest.raises(ValueError):
+        config.save(tmp_path, kk=4)
+    assert json.loads((tmp_path / "config.json").read_text())["k"] == 12  # a refused save changes nothing
+
+    monkeypatch.setenv("CONTEXT_K", "0")
+    with pytest.raises(ValueError, match="CONTEXT_K=0"):
+        config.get("k", tmp_path)
     monkeypatch.delenv("CONTEXT_K")
-    assert st._default_k() == 8
+    (tmp_path / "config.json").write_text('{"k": "9"}')  # the hook only reads numbers, so the store refuses strings too
+    with pytest.raises(ValueError, match="JSON number"):
+        config.get("k", tmp_path)
+    (tmp_path / "config.json").write_text("{nope")
+    with pytest.raises(ValueError, match="not valid JSON"):
+        config.get("k", tmp_path)
+
+
+def test_config_cli(tmp_path: Path, monkeypatch, capsys):
+    from context_store import config
+
+    monkeypatch.setenv("CONTEXT_DIR", str(tmp_path))
+    monkeypatch.delenv("CONTEXT_K", raising=False)
+    monkeypatch.delenv("CONTEXT_SYNC_K", raising=False)
+    assert config.main(["--sync-k", "10"]) == 0
+    out = capsys.readouterr().out
+    assert "k       8    from default" in out and "sync_k  10   from config.json" in out, out
+    with pytest.raises(SystemExit) as e:
+        config.main(["--k", "500"])
+    assert e.value.code == 2 and json.loads((tmp_path / "config.json").read_text()) == {"sync_k": 10}
+
+
+def test_select_default_k_follows_config(tmp_path: Path, monkeypatch):
+    """No k given: the repo's config.json decides, re-read on every call; an explicit k still wins."""
+    monkeypatch.delenv("CONTEXT_K", raising=False)
+
+    class Flat:  # stand-in embedder, so this runs without downloading the model
+        def embed(self, texts):
+            return [[1.0] + [0.0] * 383 for _ in texts]
+
+    s = Store(tmp_path)
+    s._model = Flat()
+    lines = [json.dumps({"id": f"m{i:011d}", "ts": f"2026-01-{i + 1:02d}T00:00:00+00:00", "text": f"fact {i}", "tags": [], "source": ""})
+             for i in range(12)]
+    (tmp_path / "memories/main.jsonl").write_text("\n".join(lines) + "\n")
+    assert len(s.select("")) == 8
+    (tmp_path / "config.json").write_text('{"k": 3}')
+    assert [r["id"] for r in s.select("")] == ["m00000000011", "m00000000010", "m00000000009"]
+    assert len(s.select("", k=5)) == 5
+    monkeypatch.setenv("CONTEXT_K", "11")
+    assert len(s.select("")) == 11

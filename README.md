@@ -143,7 +143,7 @@ of taking the defaults.
 | `.fornix/` | the store and the MCP server, with an empty `memories/main.jsonl` |
 | `.mcp.json` | the `fornix` server entry, merged into whatever was there |
 | `.claude/skills/context-sync/` | the skill that drives the per-prompt loop |
-| `.claude/commands/context-*.md` | `/context-start-sync`, `/context-start-sync-readonly`, `/context-stop-sync` |
+| `.claude/commands/context-*.md` | `/context-start-sync`, `/context-start-sync-readonly`, `/context-start-sync-detail`, `/context-stop-sync`, `/context-set-k` |
 | `.claude/hooks/context-sync.sh` + `settings.json` | a `UserPromptSubmit` hook that re-arms the loop every prompt, so it survives compaction |
 | `.agent/` | the same skill and commands under the vendor-neutral tree some agents read |
 
@@ -191,7 +191,7 @@ stated preference. Not durable, so it does not: transient state, file contents,
 anything re-derivable by reading the repo, general knowledge. Never: credentials,
 tokens, personal data. The store is committed and pushed.
 
-### Four commands
+### Five commands
 
 | command | does |
 | --- | --- |
@@ -199,6 +199,7 @@ tokens, personal data. The store is committed and pushed.
 | `/context-start-sync-readonly` | recall only, writes nothing, ever. For someone else's repo, or a branch whose decisions are not settled |
 | `/context-start-sync-detail` | full sync, plus every prompt and tool call (name, input, output) logged verbatim to the `detail` scope by the hook. Secrets masked, 4000 chars per action, gitignored so it stays local |
 | `/context-stop-sync` | final flush of anything durable, then off |
+| `/context-set-k [k] [sync_k]` | how many memories are recalled, saved for the repo. See [Recall size](#recall-size-k) |
 
 ---
 
@@ -208,7 +209,7 @@ Any MCP client gets the same six tools. Scopes are named JSONL files; `main` is 
 
 | tool | args | does |
 | --- | --- | --- |
-| `select` | `query`, `scope=main`, `k=8`, `tags`, `since` | Semantic search, best first, each with a score. Empty query lists the `k` newest. `since="2026-10-01"` keeps what changed from then on. |
+| `select` | `query`, `scope=main`, `k`, `tags`, `since` | Semantic search, best first, each with a score. Empty query lists the `k` newest. `since="2026-10-01"` keeps what changed from then on. |
 | `write` | `text`, `scope=main`, `tags`, `source`, `id` | Save one fact. Pass an existing `id` to replace that memory in place. |
 | `compress` | `scope`, `ids`, `summary`, `threshold=0.92` | `ids` + `summary`: fold those memories into one. Neither: merge near-duplicates, newest kept. |
 | `isolate` | `scope`, `seed_from`, `query`, `k`, `tags` | Open a private scope, optionally seeded with the top `k` hits from another. |
@@ -218,6 +219,26 @@ Any MCP client gets the same six tools. Scopes are named JSONL files; `main` is 
 A sub-task or a sub-agent that will generate a lot of throwaway reasoning gets
 `isolate("task-x", seed_from="main", query=...)`, works in that scope, then
 `compress("main", ids, summary)` folds the useful residue back.
+
+### Recall size (`k`)
+
+Two numbers decide how many memories come back, set per repo in `.fornix/config.json`:
+
+| setting | built-in | is |
+| --- | --- | --- |
+| `k` | 8 | what `select` and `isolate` return when the caller passes no `k` |
+| `sync_k` | 6 | the `k` the hook asks for on every prompt while sync is on |
+
+```sh
+/context-set-k 12 10                       # in Claude Code: k=12, sync_k=10. Also: sync_k=10, or no args to show
+uvx fornix setup -y --k 12 --sync-k 10     # at install; upgrade takes the same flags
+uv run --directory .fornix python -m context_store.config --sync-k 10   # what the command runs
+```
+
+Commit `config.json` so teammates get the same values. The server reads it on every
+call and the hook on every prompt, so a change applies at once, with no restart.
+`CONTEXT_K` and `CONTEXT_SYNC_K` in the environment override the file on one machine.
+An explicit `k` in a call always wins. Values are whole numbers from 1 to 100.
 
 ---
 
@@ -281,6 +302,7 @@ from GitHub, so it needs `git`; the rest run from a checkout.
 uvx fornix setup /path/to/repo -y           # a repo other than the current one
 uvx fornix setup --no-hook                  # skill only, no hook
 uvx fornix setup --codex --vscode           # register those clients as you go
+uvx fornix setup -y --k 12 --sync-k 10      # recall sizes, saved in .fornix/config.json
 uvx fornix upgrade -y                       # update the install here, no questions
 uvx fornix set-root ..                      # join the workspace folder above
 uvx --from git+https://github.com/ZGA2519/fornix fornix setup   # track main
@@ -357,8 +379,7 @@ same file.
 **The index is disposable.** `index.db` is a sqlite-vec index rebuilt from the JSONL
 whenever they drift. Delete it freely. Embeddings come from
 `BAAI/bge-small-en-v1.5` via fastembed, about 30 MB, downloaded on first run;
-`CONTEXT_EMBED_MODEL` picks another. `CONTEXT_K` sets the default `k` for
-`select` and `isolate` (8), `CONTEXT_SYNC_K` the `k` the hook recalls per prompt (6).
+`CONTEXT_EMBED_MODEL` picks another.
 
 **The skill solves *when*, the hook makes it stick.** A memory server on its own
 gets called whenever the model happens to think of it, which on a long session

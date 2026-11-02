@@ -1,6 +1,6 @@
 ---
 name: context-sync
-description: Drives the `fornix` MCP server (project memory - write/select/compress/isolate over a .fornix/ folder) on a fixed per-turn loop so recall and capture happen every prompt instead of whenever the model happens to think of it. Provides four commands, context-start-sync, context-start-sync-readonly, context-start-sync-detail and context-stop-sync. Use this skill whenever the user types any of those names, with or without a leading slash, and also whenever they ask to start or stop syncing context, turn project memory on or off, sync context without writing to it, recall only, read-only context, detail mode, log every action or tool call, "keep context in sync", "remember this for the project", "check the context store first", or when a repo contains a .fornix/ folder and the user wants past decisions honored. Also use it when a session has clearly stopped consulting project memory and needs to be put back on the loop.
+description: Drives the `fornix` MCP server (project memory - write/select/compress/isolate over a .fornix/ folder) on a fixed per-turn loop so recall and capture happen every prompt instead of whenever the model happens to think of it. Provides five commands, context-start-sync, context-start-sync-readonly, context-start-sync-detail, context-stop-sync and context-set-k. Use this skill whenever the user types any of those names, with or without a leading slash, and also whenever they ask to start or stop syncing context, turn project memory on or off, change how many memories are recalled (k), sync context without writing to it, recall only, read-only context, detail mode, log every action or tool call, "keep context in sync", "remember this for the project", "check the context store first", or when a repo contains a .fornix/ folder and the user wants past decisions honored. Also use it when a session has clearly stopped consulting project memory and needs to be put back on the loop.
 ---
 
 # context-sync
@@ -13,10 +13,10 @@ Launched by `.mcp.json` at the repo root as `uv run --directory .fornix python -
 
 | tool | args | use |
 | --- | --- | --- |
-| `select` | `query=""`, `scope="main"`, `k=8`, `tags=[]`, `since=""` | Semantic recall, best first, each with a `score`. Empty query returns the `k` newest. `since` (ISO date) keeps only what was written or corrected from then on. |
+| `select` | `query=""`, `scope="main"`, `k` (repo default, 8), `tags=[]`, `since=""` | Semantic recall, best first, each with a `score`. Empty query returns the `k` newest. `since` (ISO date) keeps only what was written or corrected from then on. |
 | `write` | `text`, `scope="main"`, `tags=[]`, `source=""`, `id=""` | Save one fact. Returns the memory with its `id`. Pass an existing `id` to replace that memory in place. |
 | `compress` | `scope="main"`, `ids=[]`, `summary=""`, `threshold=0.92` | `ids` + `summary`: replace those with one summary. Neither: merge near-duplicates, newest kept. |
-| `isolate` | `scope`, `seed_from=""`, `query=""`, `k=8`, `tags=[]` | Open a private scope, optionally seeded with the top `k` of another. |
+| `isolate` | `scope`, `seed_from=""`, `query=""`, `k` (repo default, 8), `tags=[]` | Open a private scope, optionally seeded with the top `k` of another. |
 | `forget` | `ids` | Delete those memories, from any scope. For a wrong or obsolete fact; to fix one, `write(id=...)`. |
 | `scopes` | | Every scope with its memory count and tag counts. Tags are the topics. |
 
@@ -25,7 +25,7 @@ Scope names are `[a-z0-9._-]`, 64 chars max, one JSONL file each. `main` is the 
 ## Command: context-start-sync
 
 1. Check the server answers: `select(query="", k=3)`. If the call errors, report that and **do not** turn sync on — say what failed and suggest `/mcp` to reconnect.
-2. Prime the session: `select(query=<what this session is about>, k=8)`. If the user gave no topic yet, the empty query from step 1 is enough.
+2. Prime the session: `select(query=<what this session is about>)`, leaving `k` to the repo default. If the user gave no topic yet, the empty query from step 1 is enough.
 3. If a `.fornix/` directory exists, `echo full > .fornix/.sync-on`. This is the flag the hook reads, and its contents are the mode; harmless without the hook. It's gitignored by the install. In a window opened over several repos, the flag belongs to the repo being synced — `<repo>/.fornix/.sync-on` — never the folder above them.
 4. Report in one line what came back, then run the loop below on **every** following prompt until `context-stop-sync`.
 
@@ -54,11 +54,24 @@ Full mode plus a verbatim action log: every prompt and every tool call (name, in
 
 The log is written by the hook, not by you: it fires on `UserPromptSubmit` and `PostToolUse` while the flag says `detail`. Don't `write` actions into `main` by hand; `main` stays for durable facts. To look back at what was done, `select(query=..., scope="detail")`, or `select(scope="detail", since=...)` for a time window. Each logged action is cut at 4000 chars, and a prompt, tool input or tool output that looks like it holds a secret is masked whole. `memories/detail.jsonl` is gitignored by the install: it stays on this machine unless someone removes that line. Needs the hook; with `--no-hook` there is no log. `context-stop-sync` ends it like any other mode.
 
+## Command: context-set-k
+
+Sets the two recall sizes for this repo in `.fornix/config.json`, which is committed so every session and teammate gets the same values:
+
+- `k` (built-in 8): what `select` and `isolate` return when called without a `k`. Takes effect on the next call, no restart.
+- `sync_k` (built-in 6): the `k` the hook asks for on every prompt. Takes effect on the next prompt.
+
+1. Map the arguments to flags: `N` → `--k N`, `N M` → `--k N --sync-k M`, `k=N` / `sync_k=M` → `--k N` / `--sync-k M`. No arguments → no flags, which only reports.
+2. Run `uv run --quiet --directory .fornix python -m context_store.config <flags>` from the repo root. In a window opened over several repos, use `--directory <repo>/.fornix` for the repo the user means; ask if it's unclear. Never edit another repo's config on a guess.
+3. Show its output. Values must be whole numbers from 1 to 100; on an error, pass the message on rather than retrying with a different number. If a line says an env var overrides the file (`CONTEXT_K`, `CONTEXT_SYNC_K`), say so: the saved value won't apply until it is unset.
+
+This writes a committed file, so it counts as a write: in read-only mode, tell the user it needs full sync and don't run it.
+
 ## The per-turn loop (while sync is on)
 
 Recall runs in both modes. Capture runs only in full mode.
 
-**Recall, before answering.** One `select` per prompt, `k=6`. Build the query from the *intent* of the prompt in your own words, not the prompt verbatim — it's semantic search, so "how do we handle auth token refresh" beats "fix the thing you broke". Then:
+**Recall, before answering.** One `select` per prompt, with the `k` the hook names (the repo's `sync_k`, 6 unless set). Build the query from the *intent* of the prompt in your own words, not the prompt verbatim — it's semantic search, so "how do we handle auth token refresh" beats "fix the thing you broke". Then:
 
 - Treat what comes back as project ground truth. It outranks your assumptions about this repo.
 - If a memory contradicts what you were about to say or do, say so out loud before proceeding. Never quietly overwrite a recorded decision.
@@ -124,4 +137,4 @@ The stores stay separate on purpose: one repo's decisions are not another's. Rec
 
 ## Tuning
 
-`k=6` on recall and one select per prompt is the default because recall cost is paid on every turn. Raise `k` for a research-heavy session (set `CONTEXT_SYNC_K` in the environment Claude Code runs in; `CONTEXT_K` on the server changes the default for calls that pass no `k`), drop to select-only-on-topic-change if the store is small and the session is long. If the user asks for cheaper syncing, cut recall frequency first, never capture.
+`k=6` on recall and one select per prompt is the default because recall cost is paid on every turn. Raise it for a research-heavy session with `context-set-k sync_k=<n>` (saved for the repo), or `CONTEXT_SYNC_K` / `CONTEXT_K` in the environment for one machine only — an env var beats the file, drop to select-only-on-topic-change if the store is small and the session is long. If the user asks for cheaper syncing, cut recall frequency first, never capture.

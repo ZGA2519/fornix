@@ -24,6 +24,7 @@ REPO_URL = "https://github.com/ZGA2519/fornix.git"
 CLIENT_FLAGS = ["--claude", "--codex", "--gemini", "--agy", "--vscode"]
 MCP_ENTRY = {"command": "uv", "args": ["run", "--directory", ".fornix", "python", "-m", "context_store.server", "mcp"]}
 HOOK_CMD = '"$CLAUDE_PROJECT_DIR"/.claude/hooks/context-sync.sh'
+MAX_K = 100  # the same bounds .fornix/context_store/config.py enforces, checked here before anything is written
 
 DESCRIPTION = "Project memory for AI coding sessions, installed into a repo."
 EPILOG = """\
@@ -33,15 +34,19 @@ SETUP = """\
 Installs into TARGET_REPO (default: the current directory):
 
   .fornix/                             the store and MCP server
+  .fornix/config.json                   with --k / --sync-k: the recall sizes, merged in
   .mcp.json                             mcpServers.fornix, merged in
   .claude/skills/context-sync/          the skill
-  .claude/commands/context-*.md         /context-start-sync, -readonly, -detail, /context-stop-sync
+  .claude/commands/context-*.md         /context-start-sync, -readonly, -detail, /context-stop-sync, /context-set-k
   .claude/hooks/context-sync.sh         per-prompt loop re-injection
   .claude/settings.json                 the UserPromptSubmit and PostToolUse hooks, merged in
   .agent/skills/context-sync/           the same skill, vendor-neutral tree
   .agent/prompts/context-*.md           the same commands, called prompts there
 
   --no-hook   skip the last two; the skill alone drives the loop
+  --k N       how many memories select and isolate return by default (1-100, built-in 8)
+  --sync-k N  how many the hook recalls on every prompt (1-100, built-in 6)
+              both are saved in .fornix/config.json, to commit; /context-set-k changes them later
   --claude --codex --gemini --agy --vscode
               also register the server with those clients, via .fornix/setup.sh
 
@@ -54,13 +59,40 @@ without questions; -y is accepted and changes nothing. One from before the renam
 (.context/) becomes .fornix/; if a .fornix/ is there too (a pull brought the renamed
 memories/), .context/memories/ is merged in by id and .context/ removed. Workspace
 folders that registered this repo are re-pointed at .fornix/. The hook stays as the
-install had it unless --no-hook is given."""
+install had it unless --no-hook is given. --k and --sync-k work as for setup; without
+them .fornix/config.json is left as it is."""
 SET_ROOT = """\
 FOLDER (default: the current directory) is a workspace folder opened over several
 repos. Finds every repo with a .fornix/ install up to 5 levels below it, asks which
 should join, and runs each one's .fornix/setup.sh --set-root FOLDER. -y takes them all."""
 COMMANDS = ("setup", "upgrade", "set-root")
 LEGACY = {"--set-root": "set-root", "--upgrade": "upgrade"}  # flag → the command it became
+
+
+def k_value(raw):
+    """argparse type for --k / --sync-k, so a bad value stops the run before anything is written."""
+    try:
+        k = int(raw)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{raw!r} is not a whole number") from None
+    if not 1 <= k <= MAX_K:
+        raise argparse.ArgumentTypeError(f"{k} is out of range, use 1-{MAX_K}")
+    return k
+
+
+def write_config(target, values):
+    """Merge values (k, sync_k) into .fornix/config.json, keeping keys this installer does not know."""
+    p = target / ".fornix/config.json"
+    doc = load_json(p)
+    if not isinstance(doc, dict):
+        sys.exit(f"{p} must hold a JSON object; fix or move it and re-run")
+    shown = ", ".join(f"{k}={v}" for k, v in values.items())
+    if all(doc.get(k) == v for k, v in values.items()):
+        return say(".fornix/config.json", f"already {shown}")
+    result = "replaced" if p.exists() else "created"
+    doc.update(values)
+    save_json(p, doc)
+    say(".fornix/config.json", f"{result}: {shown}")
 
 
 def parser():
@@ -72,10 +104,12 @@ def parser():
     for name, desc, short in (("setup", SETUP, "install fornix into a repo, or update it"),
                               ("upgrade", UPGRADE, "update an install already there, no questions")):
         p = sub.add_parser(name, help=short, description=desc, formatter_class=raw_fmt, usage=
-                           "%(prog)s [TARGET_REPO] [-y] [--no-hook] [--claude] [--codex] [--gemini] [--agy] [--vscode]")
+                           "%(prog)s [TARGET_REPO] [-y] [--no-hook] [--k N] [--sync-k N] [--claude] [--codex] [--gemini] [--agy] [--vscode]")
         p.add_argument("target", nargs="?", default="", metavar="TARGET_REPO")
         p.add_argument("-y", "--yes", action="store_true", help="take every default, ask nothing")
         p.add_argument("--no-hook", dest="hook", action="store_false", default=None, help="skill only, no hook")
+        p.add_argument("--k", type=k_value, metavar="N", help=f"default k for select and isolate (1-{MAX_K})")
+        p.add_argument("--sync-k", type=k_value, metavar="N", help=f"k the hook recalls per prompt (1-{MAX_K})")
         for f in CLIENT_FLAGS:
             p.add_argument(f, dest="clients", action="append_const", const=f, default=None, help=argparse.SUPPRESS)
     p = sub.add_parser("set-root", help="add the repos below a workspace folder to it",
@@ -495,9 +529,12 @@ def main(argv=None):
     def skip(d, names):
         top = Path(d) == src / ".fornix"
         return {n for n in names if n in ("__pycache__", ".DS_Store") or top and (
-            n in (".venv", ".pytest_cache", ".sync-on", "memories") or n.startswith("index.db"))}
+            n in (".venv", ".pytest_cache", ".sync-on", "memories", "config.json") or n.startswith("index.db"))}
     shutil.copytree(src / ".fornix", target / ".fornix", ignore=skip, dirs_exist_ok=True)
     say(".fornix/", "server, store code, pyproject")
+    settings = {n: v for n, v in (("k", a.k), ("sync_k", a.sync_k)) if v is not None}
+    if settings:
+        write_config(target, settings)
 
     # --- .fornix/memories/ ------------------------------------------------
     # If memories/ is already there we do not touch it at all. Only a fresh install gets the seeds.
@@ -608,7 +645,8 @@ def main(argv=None):
     print(f"     {C}/context-start-sync-readonly{R}   recall only, never writes")
     print(f"     {C}/context-start-sync-detail{R}     recall + capture, and log every tool call")
     print(f"     {C}/context-stop-sync{R}             off")
-    print(f"  {M}3{R}  commit .fornix/memories/ with your code; the rest of .fornix/ is gitignored")
+    print(f"     {C}/context-set-k{R} {D}[k] [sync_k]{R}    how many memories are recalled")
+    print(f"  {M}3{R}  commit .fornix/memories/ and .fornix/config.json with your code; the rest of .fornix/ is gitignored")
 
     # --- other agents ------------------------------------------------------
     # Claude Code reads .mcp.json, written above. Every other client is one command

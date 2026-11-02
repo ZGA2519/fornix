@@ -49,7 +49,7 @@ curl -s localhost:8765/select -d '{"query":"how is auth done"}' -H 'content-type
 | op | args | does |
 | --- | --- | --- |
 | `write` | text, scope=main, tags, id | Save one fact. Returns the memory with its id. Pass an existing `id` to correct that memory in place. |
-| `select` | query, scope=main, k=8, tags, since | Semantic search, best first with a score. Empty query lists the k newest. `since` (ISO date or datetime) keeps what changed from then on. |
+| `select` | query, scope=main, k, tags, since | Semantic search, best first with a score. Empty query lists the k newest. `since` (ISO date or datetime) keeps what changed from then on. |
 | `compress` | scope, ids, summary, threshold=0.92 | ids + summary: replace them with one summary in scope. Nothing: merge near-duplicates, newest kept. |
 | `isolate` | scope, seed_from, query, k, tags | Open a private scope, optionally seeded with the top k memories of another. |
 | `forget` | ids | Delete those memories from any scope. git keeps the old lines. |
@@ -72,5 +72,5 @@ Scope names are `[a-z0-9._-]`, one JSONL file each. `main` is the shared default
 - Deleting `index.db` or `.venv/` under a running server strands its open handles. Restart it (Claude Code: `/mcp`, reconnect). Tool errors land in the client's MCP log via stderr.
 - Merge conflicts in a JSONL: keep both sides, ids are unique, then run `compress()`.
 - `CONTEXT_EMBED_MODEL` picks any fastembed model. Changing it rebuilds the index.
-- `CONTEXT_K` (1–100, default 8) sets how many memories `select` and `isolate` return when the caller passes no `k`. `CONTEXT_SYNC_K` (1–100, default 6) sets the `k` the context-sync hook asks for on every prompt.
+- `config.json` (committed) holds the recall sizes: `k` (default 8) is what `select` and `isolate` return when the caller passes no `k`, `sync_k` (default 6) is what the context-sync hook asks for on every prompt. Whole numbers 1–100. Set them with `/context-set-k`, `uv run python -m context_store.config --k N --sync-k N`, or `fornix setup --k N --sync-k N`. Read on every call, so no restart. `CONTEXT_K` / `CONTEXT_SYNC_K` in the environment override the file; an explicit `k` in a call wins over both.
 - The server holds no LLM. Summaries come from the model calling `compress`, so any model can be the summariser.
