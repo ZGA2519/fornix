@@ -502,7 +502,7 @@ def main(argv=None):
     # --- .context/ → .fornix/ ----------------------------------------------
     # Installs from before the rename keep the store in .context/. Move it whole so
     # memories/, .sync-on and the built index come along.
-    # With --upgrade, a .fornix/ that is already there (a teammate's rename pulled in
+    # A .fornix/ that is already there (a teammate's rename pulled in
     # memories/) gets .context/memories/ merged in by id, and .context/ goes.
     old = target / ".context"
     moved = False
@@ -511,8 +511,6 @@ def main(argv=None):
             old.rename(target / ".fornix")
             moved = True
             say(".fornix/", "moved from .context/")
-        elif not a.upgrade:
-            say(".context/", "skipped, .fornix/ is there too; re-run with --upgrade to merge it in")
         else:
             added, clashes = merge_memories(old / "memories", target / ".fornix/memories")
             if (old / ".sync-on").is_file() and not (target / ".fornix/.sync-on").exists():

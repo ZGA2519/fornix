@@ -326,7 +326,7 @@ printf '%s▌%s %sfornix%s %s→%s %s\n\n' "$M" "$R" "$B" "$R" "$D" "$R" "$TARGE
 # --- .context/ → .fornix/ --------------------------------------------------
 # Installs from before the rename keep the store in .context/. Move it whole so
 # memories/, .sync-on and the built index come along.
-# With --upgrade, a .fornix/ that is already there (a teammate's rename pulled in
+# A .fornix/ that is already there (a teammate's rename pulled in
 # memories/) gets .context/memories/ merged in by id, and .context/ goes.
 MOVED=0
 if [ -d "$TARGET/.context/context_store" ]; then
@@ -334,8 +334,6 @@ if [ -d "$TARGET/.context/context_store" ]; then
     mv "$TARGET/.context" "$TARGET/.fornix"
     MOVED=1
     say .fornix/ "moved from .context/"
-  elif [ "$UPGRADE" = 0 ]; then
-    say .context/ "skipped, .fornix/ is there too; re-run with --upgrade to merge it in"
   elif [ "$HAVE_PY" = 0 ]; then
     say .context/ "skipped, no python3 to merge memories/ with; move them over by hand"
   else

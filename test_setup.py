@@ -125,6 +125,22 @@ def test_upgrade_merges_leftover_context():
             assert r.returncode == 1 and "nothing to upgrade" in r.stderr, r.stderr
 
 
+def test_setup_merges_leftover_context():
+    """A plain setup re-run (no --upgrade) must not leave .context/ and .fornix/ side by side."""
+    for installer in ([sys.executable, HERE / "setup.py", "setup", "-y"], ["sh", HERE / "install.sh", "-y"]):
+        with tempfile.TemporaryDirectory() as tmp:
+            t = pathlib.Path(tmp)
+            (t / ".context/context_store").mkdir(parents=True)
+            (t / ".context/memories").mkdir()
+            (t / ".context/memories/main.jsonl").write_text('{"id": "a"}\n{"id": "b"}\n')
+            (t / ".fornix/memories").mkdir(parents=True)
+            (t / ".fornix/memories/main.jsonl").write_text('{"id": "a"}\n')
+            r = subprocess.run([*installer, t], capture_output=True, text=True)
+            assert r.returncode == 0 and "merged 1 from .context/" in r.stdout, r.stdout + r.stderr
+            assert not (t / ".context").exists()
+            assert (t / ".fornix/memories/main.jsonl").read_text() == '{"id": "a"}\n{"id": "b"}\n'
+
+
 def test_set_root_finds_repos_below_root():
     with tempfile.TemporaryDirectory() as tmp:
         root = pathlib.Path(tmp)
@@ -197,6 +213,7 @@ if __name__ == "__main__":
     test_no_hook_and_refuses_checkout()
     test_migrates_context_install()
     test_upgrade_merges_leftover_context()
+    test_setup_merges_leftover_context()
     test_set_root_finds_repos_below_root()
     test_wizard_by_keys()
     test_old_forms_still_run()
