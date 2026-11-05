@@ -167,11 +167,12 @@ def merge_memories(old, new):
         except (ValueError, KeyError, TypeError):
             return line
         return k if isinstance(k, str) else line
+    # the store keys ids across every file, so clashes are checked against all of new/
+    have = {key(x): x for g in (sorted(new.rglob("*.jsonl")) if new.is_dir() else [])
+            for x in g.read_text().splitlines() if x.strip()}
     added = clashes = 0
     for f in sorted(old.rglob("*.jsonl")) if old.is_dir() else []:
         dest = new / f.relative_to(old)
-        body = dest.read_text() if dest.is_file() else ""
-        have = {key(x): x for x in body.splitlines() if x.strip()}
         fresh = []
         for line in f.read_text().splitlines():
             k = key(line)
@@ -184,7 +185,10 @@ def merge_memories(old, new):
                 fresh.append(line)
         if fresh:
             dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_text(body + ("\n" if body and not body.endswith("\n") else "") + "\n".join(fresh) + "\n")
+            # append, never rewrite: a running server appends to the same file, and a rewrite would drop its lines
+            with dest.open("a+b") as out:
+                lead = out.tell() and (out.seek(-1, 2), out.read(1))[1] != b"\n"
+                out.write(("\n" if lead else "").encode() + "".join(x + "\n" for x in fresh).encode())
             added += len(fresh)
     return added, clashes
 
@@ -502,7 +506,7 @@ def main(argv=None):
     # --- .context/ → .fornix/ ----------------------------------------------
     # Installs from before the rename keep the store in .context/. Move it whole so
     # memories/, .sync-on and the built index come along.
-    # With --upgrade, a .fornix/ that is already there (a teammate's rename pulled in
+    # A .fornix/ that is already there (a teammate's rename pulled in
     # memories/) gets .context/memories/ merged in by id, and .context/ goes.
     old = target / ".context"
     moved = False
@@ -511,8 +515,6 @@ def main(argv=None):
             old.rename(target / ".fornix")
             moved = True
             say(".fornix/", "moved from .context/")
-        elif not a.upgrade:
-            say(".context/", "skipped, .fornix/ is there too; re-run with --upgrade to merge it in")
         else:
             added, clashes = merge_memories(old / "memories", target / ".fornix/memories")
             if (old / ".sync-on").is_file() and not (target / ".fornix/.sync-on").exists():
