@@ -140,6 +140,14 @@ def test_setup_merges_leftover_context():
             assert not (t / ".context").exists()
             assert (t / ".fornix/memories/main.jsonl").read_text() == '{"id": "a"}\n{"id": "b"}\n'
 
+            # an id living in another .fornix/ file (moved scopes) is a clash, not a second copy
+            (t / ".context/context_store").mkdir(parents=True)
+            (t / ".context/memories").mkdir()
+            (t / ".context/memories/side.jsonl").write_text('{"id": "a", "text": "old"}\n')
+            r = subprocess.run([*installer, t], capture_output=True, text=True)
+            assert r.returncode == 0 and "1 memories differ" in r.stdout, r.stdout + r.stderr
+            assert not (t / ".fornix/memories/side.jsonl").exists()
+
 
 def test_set_root_finds_repos_below_root():
     with tempfile.TemporaryDirectory() as tmp:
